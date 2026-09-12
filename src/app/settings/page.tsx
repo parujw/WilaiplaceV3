@@ -5,6 +5,7 @@ import { Avatar, Badge, SectionHeader } from "@/components/ui";
 import { baht } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
 import { isFirebaseConfigured, storeIsPersistent } from "@/lib/db";
+import { hasInvoiceSecret } from "@/lib/invoice-link";
 import { migrationIssues } from "@/lib/repo";
 import { PropertyEditor } from "@/components/PropertyEditor";
 import { SignOutButton } from "./SettingsActions";
@@ -18,6 +19,7 @@ export default async function SettingsPage() {
   const issues = await migrationIssues();
   const firestore = isFirebaseConfigured();
   const persistent = storeIsPersistent();
+  const invoiceSecretSet = hasInvoiceSecret();
 
   return (
     <AppShell>
@@ -92,6 +94,26 @@ export default async function SettingsPage() {
           </p>
         </div>
       </section>
+
+      {!invoiceSecretSet ? (
+        <section className="px-4 pt-6">
+          <SectionHeader title="ความปลอดภัย" />
+          <div className="card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[15px] font-bold">ลิงก์ใบแจ้งหนี้ยังเดาได้</p>
+              <Badge tone="danger">ต้องแก้</Badge>
+            </div>
+            <p className="mt-2 text-[13px] leading-relaxed text-muted">
+              ยังไม่ได้ตั้ง <code className="rounded bg-surface-2 px-1">AUTH_SECRET</code> ระบบจึงใช้ค่าเริ่มต้น
+              ที่อยู่ในโค้ด ใครก็คำนวณลิงก์ใบแจ้งหนี้ของทุกห้องได้
+              ตั้งเป็นค่าสุ่มยาวๆ แล้ว deploy ใหม่
+            </p>
+            <p className="mt-2 text-[12px] leading-relaxed text-muted">
+              เปลี่ยนค่านี้เมื่อไหร่ ลิงก์ใบแจ้งหนี้ที่ส่งไปแล้วจะใช้ไม่ได้ทั้งหมด
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       {issues.length > 0 ? (
         <section className="px-4 pt-6">

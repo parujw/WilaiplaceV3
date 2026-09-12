@@ -6,6 +6,7 @@ import { IconBack } from "@/components/icons";
 import { Badge, SectionHeader } from "@/components/ui";
 import { BILL_STATUS_LABEL, METHOD_LABEL, baht, cycleLabel, thaiDate } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
+import { invoicePath } from "@/lib/invoice-link";
 import { getBill, paymentsOfBill } from "@/lib/repo";
 
 export const dynamic = "force-dynamic";
@@ -109,7 +110,7 @@ export default async function BillPage({ params }: { params: Promise<{ billId: s
           billId={bill.id}
           balance={bill.status === "void" ? 0 : bill.balance}
           canVoid={canVoid && payments.length === 0}
-          invoiceUrl={`/invoice/${encodeURIComponent(bill.id)}`}
+          invoiceUrl={invoicePath(bill.id)}
         />
       </section>
     </AppShell>

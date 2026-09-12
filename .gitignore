@@ -8,5 +8,7 @@ build/
 next-env.d.ts
 .vercel
 .DS_Store
+# ข้อมูลผู้เช่าจริงจาก V2 — ห้ามเข้า git (ใช้ data/v2-export.sample.json แทนในโหมดสาธิต)
+data/v2-export.json
 data/local-store.json
 service-account.json

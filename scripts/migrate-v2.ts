@@ -9,7 +9,7 @@
  * ก่อนรัน: ตรวจข้อมูลใน V2 ให้ตรงกันก่อน ข้อมูลเพี้ยนที่ย้ายมาจะเพี้ยนต่อ
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { cert, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
@@ -25,7 +25,20 @@ try {
   // ไม่มี .env.local ก็ไม่เป็นไร ถ้าตั้ง env มาทางอื่นแล้ว
 }
 
-const v2 = JSON.parse(readFileSync(path.join(process.cwd(), "data/v2-export.json"), "utf8")) as V2Export;
+const exportPath = path.join(process.cwd(), "data/v2-export.json");
+if (!existsSync(exportPath)) {
+  console.error(
+    [
+      `ไม่พบ ${exportPath}`,
+      "",
+      "ไฟล์นี้มีข้อมูลผู้เช่าจริงจึงไม่เก็บใน git — ต้องวางเองในเครื่องก่อนย้ายข้อมูล",
+      "โครงสร้างดูได้จาก data/v2-export.sample.json (ชื่อเป็นของสมมติ)",
+    ].join("\n"),
+  );
+  process.exit(1);
+}
+
+const v2 = JSON.parse(readFileSync(exportPath, "utf8")) as V2Export;
 const result = migrateV2(v2);
 
 const collections = {

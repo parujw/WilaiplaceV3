@@ -1,16 +1,29 @@
 import { notFound } from "next/navigation";
 import { BILL_STATUS_LABEL, baht, cycleLabel, thaiDate } from "@/lib/format";
+import { verifyInvoiceToken } from "@/lib/invoice-link";
 import { getBill, getProperty, paymentsOfBill } from "@/lib/repo";
 
 export const dynamic = "force-dynamic";
 
 /**
  * ใบแจ้งหนี้สำหรับผู้เช่า — เปิดจากลิงก์ในไลน์ได้โดยไม่ต้องล็อกอิน
+ * ต้องมีโทเคนใน URL ถึงจะเปิดได้ ไม่งั้นไล่เลขบิลอ่านของคนอื่นได้หมด
  * ต้องอ่านง่ายบนมือถือจริงๆ V2 เคยพังเพราะ layout กว้างคงที่
  */
-export default async function InvoicePage({ params }: { params: Promise<{ billId: string }> }) {
-  const { billId } = await params;
-  const bill = await getBill(decodeURIComponent(billId));
+export default async function InvoicePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ billId: string }>;
+  searchParams: Promise<{ t?: string }>;
+}) {
+  const [{ billId }, { t }] = await Promise.all([params, searchParams]);
+  const id = decodeURIComponent(billId);
+
+  // ตอบ 404 เหมือนกันทั้งกรณีโทเคนผิดและกรณีไม่มีบิล จะได้ไม่บอกว่าเลขบิลไหนมีอยู่จริง
+  if (!verifyInvoiceToken(id, t)) notFound();
+
+  const bill = await getBill(id);
   if (!bill || bill.status === "void") notFound();
 
   const [property, payments] = await Promise.all([getProperty(bill.propertyId), paymentsOfBill(bill.id)]);
