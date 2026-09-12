@@ -1,4 +1,5 @@
 import "server-only";
+import { env } from "./env";
 
 /**
  * Firebase web config ที่ส่งให้ฝั่ง client
@@ -16,14 +17,13 @@ export interface FirebaseWebConfig {
   storageBucket: string;
 }
 
-const apiKey = () => process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? process.env.FIREBASE_API_KEY;
+const apiKey = () => env("NEXT_PUBLIC_FIREBASE_API_KEY") ?? env("FIREBASE_API_KEY");
 
-export const projectId = () =>
-  process.env.FIREBASE_PROJECT_ID ?? process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+export const projectId = () => env("FIREBASE_PROJECT_ID") ?? env("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
 
 export const storageBucket = () =>
-  process.env.FIREBASE_STORAGE_BUCKET ??
-  process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ??
+  env("FIREBASE_STORAGE_BUCKET") ??
+  env("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET") ??
   (projectId() ? `${projectId()}.firebasestorage.app` : undefined);
 
 /** null = ตั้งค่าไม่ครบ ล็อกอิน Google ไม่ได้ */
@@ -35,7 +35,7 @@ export function webConfig(): FirebaseWebConfig | null {
   return {
     apiKey: key,
     // ค่าเริ่มต้นของ Firebase เสมอ ไม่ต้องตั้งเองถ้าไม่ได้ใช้โดเมนพิเศษ
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? `${project}.firebaseapp.com`,
+    authDomain: env("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN") ?? `${project}.firebaseapp.com`,
     projectId: project,
     storageBucket: storageBucket() ?? `${project}.firebasestorage.app`,
   };
@@ -46,7 +46,7 @@ export function missingFirebaseEnv(): string[] {
   const missing: string[] = [];
   if (!projectId()) missing.push("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
   if (!apiKey()) missing.push("NEXT_PUBLIC_FIREBASE_API_KEY");
-  if (!process.env.FIREBASE_CLIENT_EMAIL) missing.push("FIREBASE_CLIENT_EMAIL");
-  if (!process.env.FIREBASE_PRIVATE_KEY) missing.push("FIREBASE_PRIVATE_KEY");
+  if (!env("FIREBASE_CLIENT_EMAIL")) missing.push("FIREBASE_CLIENT_EMAIL");
+  if (!env("FIREBASE_PRIVATE_KEY")) missing.push("FIREBASE_PRIVATE_KEY");
   return missing;
 }

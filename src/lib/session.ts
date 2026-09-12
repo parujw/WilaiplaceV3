@@ -1,6 +1,7 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import { env } from "./env";
 import { adminAuth, isFirebaseConfigured } from "./firebase-admin";
 import { db } from "./db";
 import type { AllowlistEntry, SessionUser } from "./types";
@@ -19,12 +20,12 @@ const MAX_AGE = 60 * 60 * 24 * 14; // 14 วัน
  */
 export function isDemoLoginAllowed(): boolean {
   if (isFirebaseConfigured()) return false; // ตั้งค่าจริงแล้ว ให้ล็อกอิน Google เท่านั้น
-  if (process.env.ALLOW_DEMO_LOGIN === "1") return true;
+  if (env("ALLOW_DEMO_LOGIN") === "1") return true;
   return process.env.NODE_ENV !== "production";
 }
 
 function secret(): string {
-  return process.env.AUTH_SECRET ?? "wilai-communities-dev-secret";
+  return env("AUTH_SECRET") ?? "wilai-communities-dev-secret";
 }
 
 function sign(payload: string): string {
@@ -54,7 +55,7 @@ async function allowlistFor(email: string): Promise<AllowlistEntry | null> {
   const entry = await db().get<AllowlistEntry>("allowlist", email.toLowerCase());
   if (entry) return entry;
   // เจ้าของคนแรก: ตั้งอีเมลไว้ใน env เพื่อให้เข้าได้ก่อนที่จะมี collection allowlist
-  const bootstrap = (process.env.OWNER_EMAILS ?? "")
+  const bootstrap = (env("OWNER_EMAILS") ?? "")
     .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
   if (bootstrap.includes(email.toLowerCase())) {
     return { email, role: "owner", name: email, photoUrl: null, propertyIds: [] };

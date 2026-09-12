@@ -6,6 +6,58 @@ import { IconGoogle } from "@/components/icons";
 import type { FirebaseWebConfig } from "@/lib/firebase-config";
 import { signInWithGoogle } from "@/lib/firebase-client";
 
+/**
+ * แปลรหัสข้อผิดพลาดของ Firebase เป็นสิ่งที่ต้องไปทำ
+ * ข้อความดิบอย่าง auth/api-key-not-valid ไม่ได้บอกว่าต้องแก้ตรงไหน
+ */
+const AUTH_ERROR: Record<string, string> = {
+  "auth/api-key-not-valid.-please-pass-a-valid-api-key.":
+    "API key ไม่ถูกต้อง — ตรวจค่า NEXT_PUBLIC_FIREBASE_API_KEY ใน Vercel ว่าไม่มีช่องว่าง ไม่มีเครื่องหมายคำพูดครอบ และไม่มีบรรทัดว่างต่อท้าย แล้ว Redeploy",
+  "auth/api-key-not-valid":
+    "API key ไม่ถูกต้อง — ตรวจค่า NEXT_PUBLIC_FIREBASE_API_KEY ใน Vercel ว่าไม่มีช่องว่างหรือเครื่องหมายคำพูดติดมา แล้ว Redeploy",
+  "auth/unauthorized-domain":
+    "โดเมนนี้ยังไม่ได้รับอนุญาต — Firebase Console → Authentication → Settings → Authorized domains แล้วเพิ่มโดเมนของเว็บนี้",
+  "auth/operation-not-allowed":
+    "ยังไม่ได้เปิดการล็อกอินด้วย Google — Firebase Console → Authentication → Sign-in method → เปิด Google",
+  "auth/configuration-not-found":
+    "โปรเจกต์นี้ยังไม่ได้เปิดใช้ Authentication — Firebase Console → Authentication → Get started",
+  "auth/popup-blocked":
+    "เบราว์เซอร์บล็อกหน้าต่างล็อกอิน อนุญาตป็อปอัปสำหรับเว็บนี้แล้วลองใหม่",
+  "auth/network-request-failed": "เชื่อมต่อ Firebase ไม่ได้ ตรวจสัญญาณอินเทอร์เน็ตแล้วลองใหม่",
+};
+
+/** ผู้ใช้ปิดหน้าต่างเอง ไม่ใช่ข้อผิดพลาด ไม่ต้องขึ้นกล่องแดง */
+const SILENT = new Set(["auth/popup-closed-by-user", "auth/cancelled-popup-request", "auth/user-cancelled"]);
+
+/** ย่อ API key ให้เทียบกับค่าใน Firebase Console ได้ โดยไม่ต้องโชว์ทั้งตัว */
+function fingerprint(apiKey: string): string {
+  return `ค่าที่ระบบใช้อยู่: ${apiKey.slice(0, 8)}…${apiKey.slice(-4)} ยาว ${apiKey.length} ตัว (ของจริงต้องยาว 39 ตัว)`;
+}
+
+function describe(err: unknown, config: FirebaseWebConfig | null): string | null {
+  const code = (err as { code?: string })?.code ?? "";
+  if (SILENT.has(code)) return null;
+
+  const message = err instanceof Error ? err.message : "";
+  let text = AUTH_ERROR[code];
+  if (!text) {
+    // เผื่อ Firebase เปลี่ยนรูปแบบ code ให้จับจากข้อความแทน
+    for (const [key, value] of Object.entries(AUTH_ERROR)) {
+      if (message.includes(key.replace(/\.$/, ""))) {
+        text = value;
+        break;
+      }
+    }
+  }
+  if (!text) return message || "เข้าสู่ระบบไม่สำเร็จ";
+
+  // ปัญหาเรื่องคีย์ ให้เทียบค่าได้เลยว่าที่เก็บไว้ตรงกับใน Console ไหม
+  if (code.startsWith("auth/api-key-not-valid") && config) {
+    return `${text}\n\n${fingerprint(config.apiKey)}`;
+  }
+  return text;
+}
+
 /** บอกให้ชัดว่าแต่ละตัวไปหยิบมาจากหน้าไหนของ Firebase Console */
 const WHERE_FROM: Record<string, string> = {
   NEXT_PUBLIC_FIREBASE_API_KEY: "Project settings → General → Your apps → Web app → apiKey",
@@ -51,7 +103,7 @@ export function LoginForm({
       await post("/api/auth/session", { idToken });
       startTransition(() => router.replace("/select"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "เข้าสู่ระบบไม่สำเร็จ");
+      setError(describe(err, webConfig));
     } finally {
       setBusy(false);
     }
@@ -136,7 +188,9 @@ export function LoginForm({
       )}
 
       {error ? (
-        <p className="rounded-xl bg-danger/10 px-4 py-3 text-center text-[13px] font-medium text-danger">{error}</p>
+        <p className="whitespace-pre-line rounded-xl bg-danger/10 px-4 py-3 text-center text-[13px] font-medium leading-relaxed text-danger">
+          {error}
+        </p>
       ) : null}
     </div>
   );

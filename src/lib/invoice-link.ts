@@ -1,5 +1,6 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { env } from "./env";
 
 /**
  * ลิงก์ใบแจ้งหนี้ที่เดาไม่ได้
@@ -18,11 +19,11 @@ const TOKEN_LENGTH = 16;
 
 /** ตั้ง AUTH_SECRET หรือยัง — ถ้ายัง โทเคนคำนวณจากค่า default ที่อยู่ในโค้ดสาธารณะ = เดาได้ */
 export function hasInvoiceSecret(): boolean {
-  return Boolean(process.env.AUTH_SECRET);
+  return Boolean(env("AUTH_SECRET"));
 }
 
 export function invoiceToken(billId: string): string {
-  const secret = process.env.AUTH_SECRET ?? "wilai-communities-dev-secret";
+  const secret = env("AUTH_SECRET") ?? "wilai-communities-dev-secret";
   return createHmac("sha256", secret).update(`invoice:${billId}`).digest("base64url").slice(0, TOKEN_LENGTH);
 }
 
