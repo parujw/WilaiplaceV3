@@ -3,6 +3,7 @@ import { Sarabun } from "next/font/google";
 import { PrintButton } from "./PrintButton";
 import { BILL_STATUS_LABEL, baht, cycleLabel, thaiDate } from "@/lib/format";
 import { verifyInvoiceToken } from "@/lib/invoice-link";
+import { paymentFor } from "@/lib/payment-default";
 import { getBill, getProperty, paymentsOfBill } from "@/lib/repo";
 import type { Bill } from "@/lib/types";
 import "./print.css";
@@ -40,9 +41,9 @@ export default async function InvoicePrintPage({
   const [property, payments] = await Promise.all([getProperty(bill.propertyId), paymentsOfBill(bill.id)]);
   if (!property) notFound();
 
-  const pay = property.payment;
+  const pay = paymentFor(property.payment);
   const paidAt = payments.map((p) => p.paidAt).filter(Boolean).sort().at(-1) ?? null;
-  const reference = pay?.reference?.trim() || bill.billNo;
+  const reference = pay.reference.trim() || bill.billNo;
 
   return (
     <main className={`${sarabun.className} sheet`}>
@@ -151,25 +152,23 @@ export default async function InvoicePrintPage({
         <strong>฿{baht(bill.total)}</strong>
       </div>
 
-      {pay && (pay.method || pay.accountName || pay.accountNo || pay.qrUrl) ? (
-        <section className="pay">
-          {pay.qrUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={pay.qrUrl} alt="QR พร้อมเพย์" className="qr" />
+      <section className="pay">
+        {pay.qrUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={pay.qrUrl} alt="QR พร้อมเพย์" className="qr" />
+        ) : null}
+        <div className="pay-body">
+          <p className="pay-title">ชำระผ่าน {pay.method || "โอนธนาคาร"}</p>
+          {pay.accountName ? (
+            <p>
+              ชื่อบัญชี: <strong>{pay.accountName}</strong>
+            </p>
           ) : null}
-          <div className="pay-body">
-            <p className="pay-title">ชำระผ่าน {pay.method || "โอนธนาคาร"}</p>
-            {pay.accountName ? (
-              <p>
-                ชื่อบัญชี: <strong>{pay.accountName}</strong>
-              </p>
-            ) : null}
-            {pay.accountNo ? <p>เลขบัญชี: {pay.accountNo}</p> : null}
-            <p>เลขที่อ้างอิง: {reference}</p>
-            {pay.note ? <p className="muted">{pay.note}</p> : null}
-          </div>
-        </section>
-      ) : null}
+          {pay.accountNo ? <p>เลขบัญชี: {pay.accountNo}</p> : null}
+          <p>เลขที่อ้างอิง: {reference}</p>
+          {pay.note ? <p className="muted">{pay.note}</p> : null}
+        </div>
+      </section>
 
       <aside className="notice">
         <p>

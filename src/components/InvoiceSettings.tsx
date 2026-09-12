@@ -16,6 +16,7 @@ export function InvoiceSettings({
   preparedBy,
   payment,
   printHref,
+  usingDefault,
 }: {
   propertyId: string;
   nameEn: string;
@@ -23,6 +24,8 @@ export function InvoiceSettings({
   payment: PaymentInfo | null;
   /** ลิงก์ดูตัวอย่างใบล่าสุด ไม่มีบิลก็ไม่ต้องส่งมา */
   printHref: string | null;
+  /** true = ยังไม่ได้กรอกเอง กำลังใช้ค่าเริ่มต้นที่ติดมากับระบบ */
+  usingDefault: boolean;
 }) {
   const router = useRouter();
   const qrInput = useRef<HTMLInputElement>(null);
@@ -120,6 +123,17 @@ export function InvoiceSettings({
       <p className="text-[13px] leading-relaxed text-muted">
         ข้อมูลชุดนี้ใช้กับใบแจ้งหนี้ทุกใบ กรอกครั้งเดียวพอ
       </p>
+
+      {usingDefault ? (
+        <div className="rounded-xl bg-warn/12 px-4 py-3">
+          <p className="text-[13px] font-bold text-[#96690f]">กำลังใช้บัญชีเริ่มต้นที่ติดมากับระบบ</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-[#96690f]">
+            QR และเลขบัญชีของวิไลเพลสถูกใส่ไว้ให้แล้ว ใบแจ้งหนี้พิมพ์ออกมาใช้ได้ทันที
+            <br />
+            ถ้าอาคารนี้รับเงินเข้าบัญชีอื่น ต้องกรอกทับที่นี่ ไม่งั้นเงินจะเข้าบัญชีเดิม
+          </p>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block">

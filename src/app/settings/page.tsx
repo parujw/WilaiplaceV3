@@ -6,6 +6,7 @@ import { baht } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
 import { isFirebaseConfigured, storeIsPersistent } from "@/lib/db";
 import { hasInvoiceSecret, invoicePrintPath } from "@/lib/invoice-link";
+import { isUsingDefaultPayment } from "@/lib/payment-default";
 import { listBills, migrationIssues } from "@/lib/repo";
 import { isAllowlistRequired } from "@/lib/session";
 import { InvoiceSettings } from "@/components/InvoiceSettings";
@@ -151,6 +152,7 @@ export default async function SettingsPage() {
           preparedBy={property.preparedBy ?? ""}
           payment={property.payment ?? null}
           printHref={latestBill ? invoicePrintPath(latestBill.id) : null}
+          usingDefault={isUsingDefaultPayment(property.payment)}
         />
       </section>
 

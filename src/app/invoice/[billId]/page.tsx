@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { BILL_STATUS_LABEL, baht, cycleLabel, thaiDate } from "@/lib/format";
 import { invoicePrintPath, verifyInvoiceToken } from "@/lib/invoice-link";
+import { paymentFor } from "@/lib/payment-default";
 import { getBill, getProperty, paymentsOfBill } from "@/lib/repo";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,8 @@ export default async function InvoicePage({
 
   const [property, payments] = await Promise.all([getProperty(bill.propertyId), paymentsOfBill(bill.id)]);
   if (!property) notFound();
+
+  const pay = paymentFor(property.payment);
 
   return (
     <main className="mx-auto w-full max-w-[32rem] px-4 py-8">
@@ -113,6 +116,30 @@ export default async function InvoicePage({
           <p className="mt-4 text-center text-[13px] font-semibold">
             สถานะ: {BILL_STATUS_LABEL[bill.status]}
           </p>
+
+          {bill.balance > 0 ? (
+            <div className="mt-5 rounded-2xl border border-ok/25 bg-ok/6 px-4 py-4">
+              <p className="text-center text-[14px] font-bold text-ok">ชำระผ่าน {pay.method}</p>
+              {pay.qrUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={pay.qrUrl}
+                  alt="QR พร้อมเพย์"
+                  className="mx-auto mt-3 w-[220px] max-w-full rounded-xl bg-white"
+                />
+              ) : null}
+              <div className="mt-3 space-y-0.5 text-center text-[13px] text-ink-2">
+                {pay.accountName ? (
+                  <p>
+                    ชื่อบัญชี: <span className="font-bold">{pay.accountName}</span>
+                  </p>
+                ) : null}
+                {pay.accountNo ? <p>เลขบัญชี: {pay.accountNo}</p> : null}
+                <p>เลขที่อ้างอิง: {pay.reference.trim() || bill.billNo}</p>
+                {pay.note ? <p className="text-muted">{pay.note}</p> : null}
+              </div>
+            </div>
+          ) : null}
 
           {payments.length > 0 ? (
             <div className="mt-5">

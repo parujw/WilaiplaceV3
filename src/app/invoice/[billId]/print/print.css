@@ -206,7 +206,7 @@
   align-items: baseline;
   justify-content: flex-end;
   gap: 12pt;
-  margin-top: 14pt;
+  margin-top: 12pt;
   color: var(--brand);
 }
 
@@ -235,8 +235,8 @@
 
 .qr {
   /* คุมด้วยความสูง เพราะรูป QR แต่ละใบสัดส่วนไม่เท่ากัน
-     120pt ≈ 42 มม. ยังใหญ่พอให้กล้องมือถือสแกนติดตอนพิมพ์ลงกระดาษ */
-  height: 120pt;
+     การ์ดสูง 138pt ทำให้ตัว QR เองราว 31 มม. สแกนติดชัวร์ตอนพิมพ์ลงกระดาษ */
+  height: 138pt;
   width: auto;
   border-radius: 4pt;
   background: #fff;
@@ -260,7 +260,7 @@
 /* --------------------------------- กล่องเตือน -------------------------------- */
 
 .notice {
-  margin-top: 12pt;
+  margin-top: 10pt;
   border-left: 4pt solid var(--brand);
   background: var(--notice-bg);
   padding: 10pt 14pt;
@@ -276,7 +276,7 @@
 .signs {
   display: flex;
   gap: 48pt;
-  margin-top: 20pt;
+  margin-top: 12pt;
   text-align: center;
 }
 
@@ -302,7 +302,7 @@
 .foot {
   display: flex;
   justify-content: space-between;
-  margin-top: 14pt;
+  margin-top: 10pt;
   color: var(--faint);
   font-size: 8pt;
 }
