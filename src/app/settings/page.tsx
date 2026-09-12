@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { IconBack } from "@/components/icons";
+import { IconBack, IconChevron } from "@/components/icons";
 import { Avatar, Badge, SectionHeader } from "@/components/ui";
 import { baht } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
@@ -131,6 +131,19 @@ export default async function SettingsPage() {
               ))}
             </ul>
           </div>
+        </section>
+      ) : null}
+
+      {user.role === "owner" ? (
+        <section className="px-4 pt-6">
+          <SectionHeader title="ข้อมูล" />
+          <Link href="/settings/migrate" className="card flex items-center justify-between gap-3 p-4 active:bg-surface-2">
+            <div className="min-w-0">
+              <p className="text-[15px] font-bold">ย้ายข้อมูลจาก V2</p>
+              <p className="mt-0.5 text-[13px] text-muted">อัปโหลดไฟล์ export แล้วกดยืนยัน ไม่ต้องใช้ terminal</p>
+            </div>
+            <IconChevron className="h-5 w-5 shrink-0 text-muted" />
+          </Link>
         </section>
       ) : null}
 

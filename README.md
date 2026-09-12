@@ -50,17 +50,33 @@ cp .env.example .env.local     # เติมค่าให้ครบ
 > Firebase web config (`apiKey`, `authDomain`, …) ไม่ใช่ความลับ มันถูกส่งไปกับหน้าเว็บอยู่แล้ว
 > ที่เป็นความลับจริงคือ Service Account JSON — `FIREBASE_PRIVATE_KEY` อย่า commit และอย่าส่งให้ใคร
 
-### deploy ขึ้น Vercel
+### deploy ขึ้น Vercel — ทำได้ครบจากในเบราว์เซอร์ ไม่ต้องใช้ terminal
 
-1. Project Settings → Environment Variables ใส่ค่าชุดเดียวกับ `.env.local`
-   (`FIREBASE_PRIVATE_KEY` วางทั้งก้อนรวม `-----BEGIN PRIVATE KEY-----`)
-2. Redeploy — Vercel ไม่หยิบ env ใหม่ให้ deployment เดิม
-3. Firebase Console → Authentication → Settings → Authorized domains เพิ่มโดเมนของ Vercel
-4. รัน `npm run migrate:v2` จากเครื่องตัวเองครั้งเดียวเพื่อดันข้อมูลขึ้น Firestore
+1. **Firebase Console → Firestore Database → Create database** เลือก **Production mode**
+   (rules แบบล็อกทุกอย่างถูกแล้ว แอปเขียนผ่าน Admin SDK ฝั่งเซิร์ฟเวอร์ซึ่งไม่ผ่าน rules
+   ถ้าอยากใช้ rules ของโปรเจกต์นี้ ก๊อป `firestore.rules` ไปวางในแท็บ Rules แล้วกด Publish)
+2. **Firebase Console → Authentication → Sign-in method** เปิด **Google**
+3. **Firebase Console → Authentication → Settings → Authorized domains** เพิ่มโดเมนของ Vercel
+4. **Firebase Console → ⚙️ Project settings → Service accounts → Generate new private key**
+5. **Vercel → Settings → Environment Variables** ใส่ค่าตาม `.env.example`
+   (`FIREBASE_PRIVATE_KEY` วางทั้งก้อนรวมบรรทัด `-----BEGIN PRIVATE KEY-----`)
+6. **Vercel → Deployments → Redeploy** — Vercel ไม่หยิบ env ใหม่ให้ deployment เดิม
+7. ล็อกอิน แล้วไป **ตั้งค่า → ย้ายข้อมูลจาก V2** อัปโหลดไฟล์ export
 
 หน้าล็อกอินจะบอกเองว่ายังขาด environment variable ตัวไหน
 
 ## ย้ายข้อมูล V2 ขึ้น Firestore
+
+### วิธีที่ 1 — ในแอป ไม่ต้องใช้ terminal (แนะนำ)
+
+ล็อกอินเป็นเจ้าของ → **ตั้งค่า → ย้ายข้อมูลจาก V2** → เลือกไฟล์ `v2-export.json`
+
+เลือกไฟล์แล้วยังไม่เขียนอะไร ระบบจะสรุปให้ดูก่อนว่าจะย้ายอะไรเข้าไปบ้าง
+มีอะไรอยู่ในระบบแล้วบ้าง และเจอจุดไหนที่ข้อมูล V2 ไม่ตรงกัน แล้วค่อยกดยืนยัน
+
+รันซ้ำได้ ค่าเริ่มต้นคือข้ามรายการที่มีอยู่แล้ว ติ๊ก "เขียนทับของเดิม" ถ้าต้องการย้ายใหม่ทั้งหมด
+
+### วิธีที่ 2 — จาก terminal
 
 ```bash
 npm run migrate:v2 -- --dry-run    # ดูก่อนว่าจะย้ายอะไรบ้าง ไม่เขียนอะไรทั้งนั้น
@@ -68,13 +84,14 @@ npm run migrate:v2                 # เขียนจริง (ข้าม�
 npm run migrate:v2 -- --force      # เขียนทับของเดิม
 ```
 
-สคริปต์ตั้งเลขรันต่อจากของเดิมให้ด้วย (bill 26, invoice 26, receipt 23) เลขจึงไม่ขาดช่วง
+ทั้งสองวิธีใช้โค้ดแปลงและโค้ดเขียนชุดเดียวกัน (`src/lib/migrate/`) ผลลัพธ์จึงเหมือนกัน
+และตั้งเลขรันต่อจากของเดิมให้ด้วย (bill 26, invoice 26, receipt 23) เลขจึงไม่ขาดช่วง
 
 ### ไฟล์ข้อมูล V2
 
 | ไฟล์ | อยู่ใน git | ใช้ทำอะไร |
 |---|---|---|
-| `data/v2-export.json` | **ไม่** | สแนปช็อตชีต V2 ของจริง ชื่อและเบอร์ผู้เช่าจริง วางเองในเครื่องก่อนรัน migrate |
+| `data/v2-export.json` | **ไม่** | สแนปช็อตชีต V2 ของจริง ชื่อและเบอร์ผู้เช่าจริง |
 | `data/v2-export.sample.json` | ใช่ | โครงสร้างเดียวกันเป๊ะ แต่ชื่อเป็นของสมมติ ใช้รันโหมดสาธิต |
 
 โหมดสาธิตใช้ไฟล์จริงถ้ามีในเครื่อง ไม่มีก็ใช้ไฟล์ตัวอย่าง
@@ -82,7 +99,7 @@ deploy ที่ไหนก็ตามจึงไม่มีทางพา�
 
 ถ้าจะย้ายรอบใหม่ให้ export ชีต V2 ทับ `data/v2-export.json` ทั้งไฟล์
 
-**ตัวแปลงไม่ซ่อมข้อมูลเงียบๆ** จุดที่ชีต V2 ไม่ตรงกันจะถูกบันทึกไว้และแสดงในหน้าตั้งค่า
+**ตัวแปลงไม่ซ่อมข้อมูลเงียบๆ** จุดที่ชีต V2 ไม่ตรงกันจะถูกบันทึกไว้และแสดงทั้งตอนย้ายและในหน้าตั้งค่า
 ข้อมูลชุดปัจจุบันมี 6 จุด เช่น รหัส `T0013` ถูกใช้ซ้ำกับผู้เช่า 2 คน (ออกรหัส `T0018` ให้แทน)
 และห้องที่ V2 ไม่ได้กรอกชื่อผู้เช่าไว้
 
