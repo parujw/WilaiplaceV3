@@ -44,6 +44,8 @@ export function MigrateForm({ firestore }: { firestore: boolean }) {
   const [issues, setIssues] = useState<string[]>([]);
   const [report, setReport] = useState<Report | null>(null);
   const [force, setForce] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasted, setPasted] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,9 +57,55 @@ export function MigrateForm({ firestore }: { firestore: boolean }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ export: data, dryRun, force }),
     });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.error ?? "ทำรายการไม่สำเร็จ");
+
+    // เซิร์ฟเวอร์อาจตอบเป็นหน้า HTML ตอนพังหนักๆ ต้องอ่านเป็นข้อความก่อน
+    // ไม่งั้น res.json() จะพังแล้วกลืนสาเหตุจริงไปหมด
+    const text = await res.text();
+    let json: { error?: string; detail?: string } & Record<string, unknown> = {};
+    try {
+      json = JSON.parse(text);
+    } catch {
+      if (!res.ok) {
+        throw new Error(`เซิร์ฟเวอร์ตอบผิดพลาด (HTTP ${res.status})\n${text.slice(0, 200)}`);
+      }
+      throw new Error("เซิร์ฟเวอร์ตอบข้อมูลที่อ่านไม่ออก");
+    }
+
+    if (!res.ok) {
+      throw new Error(
+        [json.error ?? `ทำรายการไม่สำเร็จ (HTTP ${res.status})`, json.detail ? `\n\nรายละเอียด: ${json.detail}` : ""]
+          .join(""),
+      );
+    }
     return json;
+  }
+
+  /** ใช้ร่วมกันทั้งตอนเลือกไฟล์และตอนวางข้อความ */
+  async function load(raw: string, label: string) {
+    setBusy(true);
+    setError(null);
+    setReport(null);
+    setPreview(null);
+    try {
+      const data = JSON.parse(raw) as unknown;
+      const json = await send(data, true);
+      setPayload(data);
+      setFileName(label);
+      setPreview(json.preview as Preview[]);
+      setIssues((json.issues as string[]) ?? []);
+    } catch (err) {
+      setPayload(null);
+      setFileName(null);
+      setError(
+        err instanceof SyntaxError
+          ? "ข้อมูลนี้อ่านไม่ออก ต้องเป็นเนื้อหาของไฟล์ v2-export.json ทั้งไฟล์"
+          : err instanceof Error
+            ? err.message
+            : "อ่านข้อมูลไม่สำเร็จ",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onPick(event: React.ChangeEvent<HTMLInputElement>) {
@@ -65,30 +113,14 @@ export function MigrateForm({ firestore }: { firestore: boolean }) {
     event.target.value = "";
     if (!file) return;
 
-    setBusy(true);
-    setError(null);
-    setReport(null);
-    setPreview(null);
+    let raw: string;
     try {
-      const data = JSON.parse(await file.text()) as unknown;
-      const json = await send(data, true);
-      setPayload(data);
-      setFileName(file.name);
-      setPreview(json.preview);
-      setIssues(json.issues ?? []);
-    } catch (err) {
-      setPayload(null);
-      setFileName(null);
-      setError(
-        err instanceof SyntaxError
-          ? "ไฟล์นี้อ่านไม่ออก ต้องเป็นไฟล์ .json ที่ export มาจาก V2"
-          : err instanceof Error
-            ? err.message
-            : "อ่านไฟล์ไม่สำเร็จ",
-      );
-    } finally {
-      setBusy(false);
+      raw = await file.text();
+    } catch {
+      setError("อ่านไฟล์ไม่ได้ ลองใช้วิธีวางข้อความแทน");
+      return;
     }
+    await load(raw, file.name);
   }
 
   async function confirm() {
@@ -97,11 +129,12 @@ export function MigrateForm({ firestore }: { firestore: boolean }) {
     setError(null);
     try {
       const json = await send(payload, false);
-      setReport(json.report);
+      setReport(json.report as Report);
       setPreview(null);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "ย้ายข้อมูลไม่สำเร็จ");
+      // ปล่อย payload ไว้ จะได้กดยืนยันซ้ำได้โดยไม่ต้องเลือกไฟล์ใหม่
     } finally {
       setBusy(false);
     }
@@ -178,14 +211,49 @@ export function MigrateForm({ firestore }: { firestore: boolean }) {
           disabled={busy}
           className="mt-4 w-full rounded-2xl bg-accent py-4 text-[15px] font-bold text-white disabled:opacity-60"
         >
-          {busy ? "กำลังตรวจไฟล์…" : fileName ? "เลือกไฟล์อื่น" : "เลือกไฟล์"}
+          {busy ? "กำลังตรวจข้อมูล…" : fileName ? "เลือกไฟล์อื่น" : "เลือกไฟล์"}
         </button>
-        <input ref={fileInput} type="file" accept=".json,application/json" onChange={onPick} className="hidden" />
+        {/* ไม่จำกัดชนิดไฟล์ เพราะมือถือหลายรุ่นมองไม่เห็นไฟล์ .json เมื่อใส่ accept */}
+        <input ref={fileInput} type="file" onChange={onPick} className="hidden" />
         {fileName ? <p className="mt-2 text-center text-[12px] text-muted">{fileName}</p> : null}
+
+        <button
+          type="button"
+          onClick={() => setPasteOpen((open) => !open)}
+          className="mt-3 w-full text-center text-[12px] font-medium text-muted underline underline-offset-4"
+        >
+          {pasteOpen ? "ซ่อนช่องวางข้อความ" : "เลือกไฟล์ไม่ได้ ใช้วิธีวางข้อความแทน"}
+        </button>
+
+        {pasteOpen ? (
+          <div className="mt-3 space-y-2">
+            <p className="text-[12px] leading-relaxed text-muted">
+              เปิดไฟล์ <code className="rounded bg-surface-2 px-1">v2-export.json</code> เลือกทั้งหมด
+              คัดลอก แล้ววางลงช่องนี้
+            </p>
+            <textarea
+              value={pasted}
+              onChange={(e) => setPasted(e.target.value)}
+              rows={5}
+              placeholder='{ "property": { ... }, "rooms": [ ... ] }'
+              className="w-full rounded-xl border border-line bg-surface-2 px-3 py-2.5 font-mono text-[12px] outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              disabled={busy || pasted.trim() === ""}
+              onClick={() => load(pasted, "ข้อความที่วาง")}
+              className="w-full rounded-xl bg-accent py-3 text-[14px] font-bold text-white disabled:opacity-50"
+            >
+              ตรวจข้อมูลที่วาง
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {error ? (
-        <p className="rounded-xl bg-danger/10 px-4 py-3 text-center text-[13px] font-semibold text-danger">{error}</p>
+        <p className="whitespace-pre-line rounded-xl bg-danger/10 px-4 py-3 text-[13px] font-semibold leading-relaxed text-danger">
+          {error}
+        </p>
       ) : null}
 
       {preview ? (

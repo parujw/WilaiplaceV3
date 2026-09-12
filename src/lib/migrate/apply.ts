@@ -14,9 +14,15 @@ export interface MigrationDoc {
   data: Record<string, unknown>;
 }
 
-/** ที่เก็บข้อมูลปลายทาง — Firestore ตรงๆ หรือผ่าน Store ก็ได้ */
+/**
+ * ที่เก็บข้อมูลปลายทาง — Firestore ตรงๆ หรือผ่าน Store ก็ได้
+ *
+ * ถามว่ามีอะไรอยู่แล้วบ้างเป็นชุด ไม่ถามทีละเอกสาร
+ * ข้อมูลชุดนี้มี 96 เอกสาร ถามทีละตัวคือ 96 รอบไป-กลับ
+ * ซึ่งกินเวลาเกินโควตาของฟังก์ชันบน Vercel จนหมดเวลาก่อนได้คำตอบ
+ */
 export interface MigrationTarget {
-  exists(collection: string, id: string): Promise<boolean>;
+  existingIds(collection: string, ids: string[]): Promise<Set<string>>;
   write(docs: MigrationDoc[]): Promise<void>;
 }
 
@@ -63,16 +69,14 @@ export async function applyMigration(
   const report: ApplyReport = { written: 0, skipped: 0, byCollection: [], counters };
 
   for (const { name, docs } of collectionsOf(result)) {
-    const pending: MigrationDoc[] = [];
-    let skipped = 0;
+    const existing = options.force
+      ? new Set<string>()
+      : await target.existingIds(name, docs.map((d) => d.id));
 
-    for (const doc of docs) {
-      if (!options.force && (await target.exists(name, doc.id))) {
-        skipped++;
-        continue;
-      }
-      pending.push({ collection: name, id: doc.id, data: doc as unknown as Record<string, unknown> });
-    }
+    const pending = docs
+      .filter((doc) => !existing.has(doc.id))
+      .map((doc) => ({ collection: name, id: doc.id, data: doc as unknown as Record<string, unknown> }));
+    const skipped = docs.length - pending.length;
 
     // แบ่งเป็นก้อน Firestore รับได้ 500 เขียนต่อ batch
     for (let i = 0; i < pending.length; i += 400) {

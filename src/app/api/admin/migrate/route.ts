@@ -14,10 +14,16 @@ import type { AllowlistEntry } from "@/lib/types";
 
 const MAX_BYTES = 5_000_000;
 
+// เผื่อเวลาให้ Firestore ตอบ ค่าเริ่มต้นของ Vercel คือ 10 วินาที ซึ่งสั้นเกินไปสำหรับงานนี้
+export const maxDuration = 60;
+
 function targetFor(store: Store) {
   return {
-    async exists(collection: string, id: string) {
-      return (await store.get(collection as CollectionName, id)) !== null;
+    /** อ่านทั้ง collection ทีเดียวแล้วเทียบในหน่วยความจำ เร็วกว่าถามทีละเอกสารมาก */
+    async existingIds(collection: string, ids: string[]) {
+      const docs = await store.list<{ id: string }>(collection as CollectionName);
+      const present = new Set(docs.map((d) => d.id));
+      return new Set(ids.filter((id) => present.has(id)));
     },
     async write(docs: Array<{ collection: string; id: string; data: Record<string, unknown> }>) {
       if (docs.length === 0) return;
@@ -43,7 +49,49 @@ function looksLikeV2Export(value: unknown): value is V2Export {
   );
 }
 
+/**
+ * แปลข้อผิดพลาดของ Firestore เป็นสิ่งที่ต้องไปทำ
+ * ข้อความดิบอย่าง "5 NOT_FOUND" ไม่มีทางเดาได้ว่าต้องไปสร้างฐานข้อมูลก่อน
+ */
+function explainWriteError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  const code = (err as { code?: number | string })?.code;
+
+  if (code === 5 || /NOT_FOUND/i.test(message)) {
+    return "ยังไม่ได้สร้างฐานข้อมูล Firestore — ไปที่ Firebase Console → Firestore Database → Create database (เลือก Production mode) แล้วลองใหม่";
+  }
+  if (code === 7 || /PERMISSION_DENIED/i.test(message)) {
+    return "Service account ไม่มีสิทธิ์เขียน Firestore — ตรวจว่า FIREBASE_CLIENT_EMAIL มาจากโปรเจกต์เดียวกับ NEXT_PUBLIC_FIREBASE_PROJECT_ID";
+  }
+  if (code === 16 || /UNAUTHENTICATED|invalid_grant|Invalid JWT/i.test(message)) {
+    return "Firebase ปฏิเสธ service account — คีย์อาจหมดอายุหรือถูกลบ ให้ Generate new private key แล้วใส่ใหม่";
+  }
+  if (/DECODER routines|error:1E08010C|asn1|Failed to parse private key/i.test(message)) {
+    return "FIREBASE_PRIVATE_KEY ผิดรูปแบบ — ต้องวางทั้งก้อนรวมบรรทัด -----BEGIN PRIVATE KEY----- และ -----END PRIVATE KEY-----";
+  }
+  if (/DEADLINE_EXCEEDED|UNAVAILABLE|ETIMEDOUT/i.test(message)) {
+    return "ติดต่อ Firestore ไม่ได้ในเวลาที่กำหนด ลองกดใหม่อีกครั้ง";
+  }
+  return `เขียนข้อมูลไม่สำเร็จ: ${message}`;
+}
+
 export async function POST(request: Request) {
+  try {
+    return await handleMigrate(request);
+  } catch (err) {
+    // กันไม่ให้หลุดเป็นหน้า error 500 ของ Next ซึ่งฝั่งหน้าเว็บอ่านไม่ออก
+    console.error("migrate failed", err);
+    return NextResponse.json(
+      {
+        error: explainWriteError(err),
+        detail: err instanceof Error ? `${(err as { code?: unknown }).code ?? ""} ${err.message}`.trim() : String(err),
+      },
+      { status: 500 },
+    );
+  }
+}
+
+async function handleMigrate(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "ยังไม่ได้ล็อกอิน" }, { status: 401 });
   if (user.role !== "owner") {
@@ -84,12 +132,13 @@ export async function POST(request: Request) {
 
   // ดูก่อนว่าจะเขียนอะไรบ้าง ยังไม่แตะข้อมูล
   if (body.dryRun !== false) {
-    const preview = [];
-    for (const { name, docs } of collectionsOf(result)) {
-      let existing = 0;
-      for (const doc of docs) if (await target.exists(name, doc.id)) existing++;
-      preview.push({ collection: name, total: docs.length, existing });
-    }
+    const preview = await Promise.all(
+      collectionsOf(result).map(async ({ name, docs }) => ({
+        collection: name,
+        total: docs.length,
+        existing: (await target.existingIds(name, docs.map((d) => d.id))).size,
+      })),
+    );
     return NextResponse.json({
       ok: true,
       dryRun: true,

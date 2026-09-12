@@ -79,8 +79,11 @@ const firestore = getFirestore();
 
 const report = await applyMigration(
   {
-    async exists(collection, id) {
-      return (await firestore.collection(collection).doc(id).get()).exists;
+    async existingIds(collection: string, ids: string[]) {
+      // select() ไม่เอา field ใดเลย ได้แค่รายชื่อ id มาเทียบ อ่านรอบเดียวจบ
+      const snapshot = await firestore.collection(collection).select().get();
+      const present = new Set(snapshot.docs.map((d) => d.id));
+      return new Set(ids.filter((id) => present.has(id)));
     },
     async write(docs) {
       if (docs.length === 0) return;
