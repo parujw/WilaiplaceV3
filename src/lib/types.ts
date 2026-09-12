@@ -31,10 +31,26 @@ export type BillLineType =
   | "discount";
 
 /** อาคาร — ระดับบนสุด ทุกอย่างอยู่ใต้อาคารเสมอ */
+/** ข้อมูลการรับชำระที่พิมพ์ลงใบแจ้งหนี้ */
+export interface PaymentInfo {
+  /** ช่องทาง เช่น "PromptPay / KBank" */
+  method: string;
+  accountName: string;
+  accountNo: string;
+  /** เลขที่อ้างอิงสำหรับโอน ปล่อยว่างได้ จะใช้เลขที่บิลแทน */
+  reference: string;
+  /** รูป QR พร้อมเพย์ (Storage หรือ data URL) */
+  qrUrl: string | null;
+  /** ข้อความต่อท้าย เช่น "กรุณาส่งสลิปหลังโอนผ่าน LINE" */
+  note: string;
+}
+
 export interface Property {
   id: string;
   name: string;
   shortName: string;
+  /** ชื่อภาษาอังกฤษ ใช้บนหัวใบแจ้งหนี้ เช่น "WILAI PLACE" */
+  nameEn?: string;
   address: string;
   photoUrl: string | null;
   phone: string;
@@ -43,6 +59,9 @@ export interface Property {
   defaultRates: Rates;
   /** วันครบกำหนดชำระของเดือนถัดไป */
   paymentDueDay: number;
+  /** ชื่อผู้จัดทำที่พิมพ์ท้ายใบแจ้งหนี้ */
+  preparedBy?: string;
+  payment?: PaymentInfo;
   active: boolean;
 }
 

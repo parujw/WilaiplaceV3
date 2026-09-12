@@ -5,7 +5,7 @@ import { adminApp, isFirebaseConfigured } from "@/lib/firebase-admin";
 import { storageBucket } from "@/lib/firebase-config";
 import { audit, getProperty } from "@/lib/repo";
 import { getSessionUser } from "@/lib/session";
-import type { Property } from "@/lib/types";
+import type { PaymentInfo, Property } from "@/lib/types";
 
 const MAX_BYTES = 2_000_000;
 
@@ -72,7 +72,15 @@ export async function PATCH(request: Request) {
   if (user.role === "viewer") return NextResponse.json({ error: "ไม่มีสิทธิ์แก้ไข" }, { status: 403 });
 
   const body = (await request.json()) as {
-    propertyId?: string; name?: string; address?: string; phone?: string; photoDataUrl?: string | null;
+    propertyId?: string;
+    name?: string;
+    nameEn?: string;
+    address?: string;
+    phone?: string;
+    preparedBy?: string;
+    photoDataUrl?: string | null;
+    payment?: Partial<PaymentInfo>;
+    qrDataUrl?: string | null;
   };
   if (!body.propertyId) return NextResponse.json({ error: "ไม่ได้ระบุอาคาร" }, { status: 400 });
 
@@ -80,9 +88,13 @@ export async function PATCH(request: Request) {
   if (!property) return NextResponse.json({ error: "ไม่พบอาคาร" }, { status: 404 });
 
   const patch: Record<string, unknown> = {};
-  if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim();
-  if (typeof body.address === "string") patch.address = body.address.trim();
-  if (typeof body.phone === "string") patch.phone = body.phone.trim();
+  const text = (value: unknown) => (typeof value === "string" ? value.trim() : undefined);
+
+  if (text(body.name)) patch.name = text(body.name);
+  if (typeof body.nameEn === "string") patch.nameEn = text(body.nameEn);
+  if (typeof body.address === "string") patch.address = text(body.address);
+  if (typeof body.phone === "string") patch.phone = text(body.phone);
+  if (typeof body.preparedBy === "string") patch.preparedBy = text(body.preparedBy);
 
   if (body.photoDataUrl === null) {
     patch.photoUrl = null;
@@ -94,13 +106,46 @@ export async function PATCH(request: Request) {
     }
   }
 
+  // ข้อมูลบัญชีที่พิมพ์ลงใบแจ้งหนี้ — เขียนทั้งก้อนเสมอ จะได้ไม่มี field ค้างจากของเดิม
+  if (body.payment || body.qrDataUrl !== undefined) {
+    const current: PaymentInfo = property.payment ?? {
+      method: "", accountName: "", accountNo: "", reference: "", qrUrl: null, note: "",
+    };
+    const next: PaymentInfo = {
+      method: text(body.payment?.method) ?? current.method,
+      accountName: text(body.payment?.accountName) ?? current.accountName,
+      accountNo: text(body.payment?.accountNo) ?? current.accountNo,
+      reference: text(body.payment?.reference) ?? current.reference,
+      note: text(body.payment?.note) ?? current.note,
+      qrUrl: current.qrUrl,
+    };
+
+    if (body.qrDataUrl === null) {
+      next.qrUrl = null;
+    } else if (typeof body.qrDataUrl === "string" && body.qrDataUrl) {
+      try {
+        next.qrUrl = await storePhoto(`${property.id}-qr`, body.qrDataUrl);
+      } catch (err) {
+        return NextResponse.json({ error: err instanceof Error ? err.message : "อัปโหลด QR ไม่สำเร็จ" }, { status: 400 });
+      }
+    }
+
+    patch.payment = next;
+  }
+
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: "ไม่มีอะไรให้แก้" }, { status: 400 });
 
   await db().update("properties", property.id, patch);
   await audit(user, {
     propertyId: property.id, action: "property.update", targetType: "property", targetId: property.id,
     before: { name: property.name, address: property.address, phone: property.phone },
-    after: { ...patch, photoUrl: patch.photoUrl ? "(อัปโหลดรูปใหม่)" : patch.photoUrl },
+    after: {
+      ...patch,
+      photoUrl: patch.photoUrl ? "(อัปโหลดรูปใหม่)" : patch.photoUrl,
+      payment: patch.payment
+        ? { ...(patch.payment as PaymentInfo), qrUrl: (patch.payment as PaymentInfo).qrUrl ? "(มีรูป QR)" : null }
+        : undefined,
+    },
   });
 
   return NextResponse.json({ ok: true });

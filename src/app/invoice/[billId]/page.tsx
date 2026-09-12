@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { BILL_STATUS_LABEL, baht, cycleLabel, thaiDate } from "@/lib/format";
-import { verifyInvoiceToken } from "@/lib/invoice-link";
+import { invoicePrintPath, verifyInvoiceToken } from "@/lib/invoice-link";
 import { getBill, getProperty, paymentsOfBill } from "@/lib/repo";
 
 export const dynamic = "force-dynamic";
@@ -131,6 +131,15 @@ export default async function InvoicePage({
           {bill.note ? <p className="mt-5 text-[12px] text-muted">หมายเหตุ: {bill.note}</p> : null}
         </div>
       </div>
+
+      <p className="no-print mt-5 text-center">
+        <a
+          href={invoicePrintPath(bill.id)}
+          className="inline-block rounded-full bg-accent px-6 py-3 text-[14px] font-bold text-white"
+        >
+          พิมพ์ใบแจ้งหนี้ (A4)
+        </a>
+      </p>
 
       <p className="mt-5 text-center text-[12px] leading-relaxed text-muted">
         สอบถามเพิ่มเติมโทร {property.phone}

@@ -1,0 +1,373 @@
+/*
+ * ใบแจ้งหนี้สำหรับพิมพ์ — วัดจากไฟล์ PDF ตัวเดิมทุกค่า
+ * ใช้หน่วย pt ตรงกับ PDF เพื่อให้ขนาดตัวอักษรและระยะห่างออกมาเท่ากันจริง
+ * A4 = 595.28 × 841.89 pt, ขอบซ้ายขวา 56 pt
+ */
+
+:root {
+  --ink: #1f2937;
+  --ink-soft: #374151;
+  --muted: #6b7280;
+  --faint: #9ca3af;
+  --brand: #dc8f2a;
+  --ok: #15803d;
+  --card: #f9fafb;
+  --pay-bg: #f0fdf4;
+  --pay-line: #bbf7d0;
+  --pill-bg: #dcfce7;
+  --notice-bg: #fdf8f0;
+  --link: #0000ee;
+}
+
+@page {
+  size: A4;
+  margin: 0;
+}
+
+.sheet {
+  box-sizing: border-box;
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  padding: 40pt 56pt;
+  background: #fff;
+  color: var(--ink);
+  font-size: 9.6pt;
+  line-height: 1.45;
+}
+
+/* ---------------------------------- หัวใบ --------------------------------- */
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24pt;
+}
+
+.brand {
+  margin: 0;
+  color: var(--brand);
+  font-size: 16pt;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.sub {
+  margin: 2pt 0 0;
+  color: var(--muted);
+}
+
+.doctype {
+  margin: 4pt 0 0;
+  font-weight: 600;
+}
+
+.head-right {
+  text-align: right;
+}
+
+.head-right > p {
+  margin: 0;
+}
+
+.invno {
+  color: var(--ink);
+  font-size: 12.8pt;
+  font-weight: 700;
+}
+
+.meta {
+  margin: 4pt 0 8pt;
+  color: var(--muted);
+}
+
+.meta > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4pt;
+}
+
+.meta dt,
+.meta dd {
+  margin: 0;
+}
+
+.meta dt::after {
+  content: ":";
+}
+
+.pill {
+  display: inline-block;
+  border-radius: 999pt;
+  padding: 2.5pt 9pt;
+  font-size: 8.5pt;
+  font-weight: 700;
+}
+
+.pill-paid { background: var(--pill-bg); color: var(--ok); }
+.pill-partial { background: #fef3c7; color: #92400e; }
+.pill-unpaid { background: #fee2e2; color: #b91c1c; }
+.pill-void { background: #f3f4f6; color: var(--muted); }
+
+.rule {
+  height: 2.4pt;
+  margin: 14pt 0;
+  background: var(--brand);
+}
+
+/* --------------------------------- การ์ดสรุป -------------------------------- */
+
+.cards {
+  display: flex;
+  gap: 12pt;
+}
+
+.card {
+  flex: 1;
+  border-radius: 6pt;
+  background: var(--card);
+  padding: 10pt 14pt;
+}
+
+.card-title {
+  margin: 0 0 8pt;
+  color: var(--faint);
+  font-size: 8pt;
+  font-weight: 700;
+}
+
+.card .row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12pt;
+  padding: 2.5pt 0;
+  font-size: 10.4pt;
+}
+
+.card .row > span {
+  color: var(--ink-soft);
+}
+
+.card .row > strong {
+  font-weight: 600;
+  text-align: right;
+}
+
+.card .row .ok { color: var(--ok); }
+.card .row .due { color: #b91c1c; }
+
+/* -------------------------------- ตารางรายการ ------------------------------- */
+
+.items {
+  width: 100%;
+  margin-top: 16pt;
+  border-collapse: collapse;
+}
+
+.items th {
+  background: var(--brand);
+  padding: 6pt 12pt;
+  color: #fff;
+  font-size: 9.6pt;
+  font-weight: 600;
+  text-align: center;
+}
+
+.items th.amount,
+.items td.amount {
+  text-align: right;
+  white-space: nowrap;
+  width: 88pt;
+}
+
+.items td {
+  padding: 5.5pt 12pt;
+  font-size: 10.4pt;
+  vertical-align: top;
+}
+
+.items tbody tr + tr td {
+  border-top: 0.5pt solid #e5e7eb;
+}
+
+.items tbody tr:last-child td {
+  border-bottom: 1.6pt solid var(--brand);
+}
+
+.qty {
+  color: var(--muted);
+  font-size: 9pt;
+}
+
+.grand {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 12pt;
+  margin-top: 14pt;
+  color: var(--brand);
+}
+
+.grand > span {
+  font-size: 12pt;
+  font-weight: 700;
+}
+
+.grand > strong {
+  font-size: 19.2pt;
+  font-weight: 800;
+}
+
+/* -------------------------------- ช่องทางชำระ ------------------------------- */
+
+.pay {
+  display: flex;
+  align-items: center;
+  gap: 16pt;
+  margin-top: 14pt;
+  border: 0.8pt solid var(--pay-line);
+  border-radius: 8pt;
+  background: var(--pay-bg);
+  padding: 14pt 16pt;
+}
+
+.qr {
+  /* คุมด้วยความสูง เพราะรูป QR แต่ละใบสัดส่วนไม่เท่ากัน
+     120pt ≈ 42 มม. ยังใหญ่พอให้กล้องมือถือสแกนติดตอนพิมพ์ลงกระดาษ */
+  height: 120pt;
+  width: auto;
+  border-radius: 4pt;
+  background: #fff;
+}
+
+.pay-body > p {
+  margin: 0 0 3pt;
+  color: var(--ink-soft);
+}
+
+.pay-title {
+  color: var(--ok);
+  font-size: 10.4pt;
+  font-weight: 700;
+}
+
+.pay-body .muted {
+  color: var(--muted);
+}
+
+/* --------------------------------- กล่องเตือน -------------------------------- */
+
+.notice {
+  margin-top: 12pt;
+  border-left: 4pt solid var(--brand);
+  background: var(--notice-bg);
+  padding: 10pt 14pt;
+  color: var(--ink-soft);
+}
+
+.notice > p {
+  margin: 0;
+}
+
+/* ---------------------------------- ลายเซ็น --------------------------------- */
+
+.signs {
+  display: flex;
+  gap: 48pt;
+  margin-top: 20pt;
+  text-align: center;
+}
+
+.signs > div {
+  flex: 1;
+}
+
+.signs .line {
+  margin: 0 0 6pt;
+  border-top: 0.6pt solid #9ca3af;
+}
+
+.signs .role {
+  margin: 0;
+  color: var(--muted);
+}
+
+.signs .who {
+  margin: 2pt 0 0;
+  font-weight: 700;
+}
+
+.foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14pt;
+  color: var(--faint);
+  font-size: 8pt;
+}
+
+/* ---------------------------------- ปุ่มพิมพ์ --------------------------------- */
+
+.print-bar {
+  position: fixed;
+  top: 12pt;
+  right: 12pt;
+  display: flex;
+  gap: 8pt;
+  z-index: 10;
+}
+
+.print-bar button {
+  border: 0;
+  border-radius: 999pt;
+  background: var(--brand);
+  padding: 9pt 20pt;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4pt 14pt -6pt rgb(0 0 0 / 0.5);
+}
+
+@media screen {
+  body {
+    background: #e4e0da;
+    padding: 16px 0;
+  }
+
+  .sheet {
+    box-shadow: 0 10px 40px -12px rgb(0 0 0 / 0.35);
+  }
+}
+
+@media print {
+  .print-bar { display: none; }
+
+  /* บิลที่มีรายการเยอะจนล้นหน้า ให้ตัดหน้าที่ขอบบล็อก ไม่ใช่กลางบล็อก */
+  .cards,
+  .pay,
+  .notice,
+  .signs,
+  .foot,
+  .items tr {
+    break-inside: avoid;
+  }
+
+  .sheet {
+    width: auto;
+    min-height: 0;
+    box-shadow: none;
+  }
+
+  /* ไม่ให้เบราว์เซอร์ตัดพื้นหลังสีออกตอนพิมพ์ */
+  .items th,
+  .rule,
+  .card,
+  .pay,
+  .notice,
+  .pill {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

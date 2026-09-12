@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export function BillActions({
-  billId, balance, canVoid, invoiceUrl,
-}: { billId: string; balance: number; canVoid: boolean; invoiceUrl: string }) {
+  billId, balance, canVoid, invoiceUrl, printUrl,
+}: { billId: string; balance: number; canVoid: boolean; invoiceUrl: string; printUrl: string }) {
   const router = useRouter();
   const [amount, setAmount] = useState(String(balance));
   const [method, setMethod] = useState("transfer");
@@ -94,6 +94,13 @@ export function BillActions({
           </button>
         </form>
       ) : null}
+
+      <a
+        href={printUrl} target="_blank" rel="noreferrer"
+        className="block rounded-xl bg-surface py-3.5 text-center text-[14px] font-bold text-accent-strong shadow-[0_1px_2px_rgb(23_23_27/0.06)]"
+      >
+        พิมพ์ใบแจ้งหนี้ (A4)
+      </a>
 
       <div className="grid grid-cols-2 gap-3">
         <a

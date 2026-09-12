@@ -5,9 +5,10 @@ import { Avatar, Badge, SectionHeader } from "@/components/ui";
 import { baht } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
 import { isFirebaseConfigured, storeIsPersistent } from "@/lib/db";
-import { hasInvoiceSecret } from "@/lib/invoice-link";
-import { migrationIssues } from "@/lib/repo";
+import { hasInvoiceSecret, invoicePrintPath } from "@/lib/invoice-link";
+import { listBills, migrationIssues } from "@/lib/repo";
 import { isAllowlistRequired } from "@/lib/session";
+import { InvoiceSettings } from "@/components/InvoiceSettings";
 import { PropertyEditor } from "@/components/PropertyEditor";
 import { SignOutButton } from "./SettingsActions";
 
@@ -22,6 +23,7 @@ export default async function SettingsPage() {
   const persistent = storeIsPersistent();
   const invoiceSecretSet = hasInvoiceSecret();
   const allowlistOnly = isAllowlistRequired();
+  const latestBill = (await listBills(property.id)).find((b) => b.status !== "void") ?? null;
 
   return (
     <AppShell>
@@ -140,6 +142,17 @@ export default async function SettingsPage() {
           </div>
         </section>
       ) : null}
+
+      <section className="px-4 pt-6">
+        <SectionHeader title="ใบแจ้งหนี้" action="ใช้ตอนพิมพ์ A4" />
+        <InvoiceSettings
+          propertyId={property.id}
+          nameEn={property.nameEn ?? ""}
+          preparedBy={property.preparedBy ?? ""}
+          payment={property.payment ?? null}
+          printHref={latestBill ? invoicePrintPath(latestBill.id) : null}
+        />
+      </section>
 
       {user.role === "owner" ? (
         <section className="px-4 pt-6">

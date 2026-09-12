@@ -31,6 +31,11 @@ export function invoicePath(billId: string): string {
   return `/invoice/${encodeURIComponent(billId)}?t=${invoiceToken(billId)}`;
 }
 
+/** หน้าเดียวกันแต่จัดหน้า A4 สำหรับพิมพ์ */
+export function invoicePrintPath(billId: string): string {
+  return `/invoice/${encodeURIComponent(billId)}/print?t=${invoiceToken(billId)}`;
+}
+
 export function verifyInvoiceToken(billId: string, token: string | undefined): boolean {
   if (!token) return false;
   const expected = invoiceToken(billId);
