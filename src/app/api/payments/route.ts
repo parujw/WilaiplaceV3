@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     method,
     paidAt,
     slip: null,
-    note: body.note || undefined,
+    ...(body.note ? { note: body.note } : {}),
   };
 
   const paid = bill.paid + amount;

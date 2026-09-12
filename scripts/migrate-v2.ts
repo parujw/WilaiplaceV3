@@ -76,6 +76,8 @@ initializeApp({
   }),
 });
 const firestore = getFirestore();
+// ให้เหมือนฝั่งแอป — undefined แปลว่าไม่ได้ตั้งค่านั้น ไม่ใช่ค่าที่ต้องเก็บ
+firestore.settings({ ignoreUndefinedProperties: true });
 
 const report = await applyMigration(
   {

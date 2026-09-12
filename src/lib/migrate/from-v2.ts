@@ -128,7 +128,9 @@ export function migrateV2(v2: V2Export, propertyId = "wlp1"): MigrationResult {
     condition: "ready",
     // ตั้งทีหลังตอนสร้างสัญญา — ห้องไม่เก็บชื่อผู้เช่า
     activeLeaseId: null,
-    note: r.note || undefined,
+    // ใส่ key ก็ต่อเมื่อมีค่าจริง ไม่ใส่ key ที่มีค่าเป็น undefined
+    // Firestore ปฏิเสธเอกสารที่มี undefined ส่วน JSON จะทิ้งไปเงียบๆ
+    ...(r.note ? { note: r.note } : {}),
   }));
   const roomByNo = new Map(rooms.map((r) => [r.roomNo, r]));
 
@@ -170,7 +172,7 @@ export function migrateV2(v2: V2Export, propertyId = "wlp1"): MigrationResult {
       lineUserId: null,
       idCard: null,
       emergencyContact: null,
-      note: t.note || undefined,
+      ...(t.note ? { note: t.note } : {}),
     });
 
     const start = parseThaiDate(t.start);
@@ -204,8 +206,8 @@ export function migrateV2(v2: V2Export, propertyId = "wlp1"): MigrationResult {
       },
       dueDay: t.dueDay || property.paymentDueDay,
       depositRefund: null,
-      endedReason: moved ? "ย้ายออก (ยกมาจาก V2)" : undefined,
-      note: t.note || undefined,
+      ...(moved ? { endedReason: "ย้ายออก (ยกมาจาก V2)" } : {}),
+      ...(t.note ? { note: t.note } : {}),
     });
   }
 
@@ -305,7 +307,7 @@ export function migrateV2(v2: V2Export, propertyId = "wlp1"): MigrationResult {
       issuedAt,
       dueDate: parseThaiDate(b.due) ?? issuedAt,
       sentToLineAt: null,
-      note: b.note || undefined,
+      ...(b.note ? { note: b.note } : {}),
     });
 
     if (elecUnits > 0 || waterUnits > 0) {
@@ -344,7 +346,7 @@ export function migrateV2(v2: V2Export, propertyId = "wlp1"): MigrationResult {
       method: parseMethod(p.method),
       paidAt: paidAt ?? "",
       slip: null,
-      note: p.note || undefined,
+      ...(p.note ? { note: p.note } : {}),
     };
   });
 

@@ -31,5 +31,17 @@ export function adminApp(): App {
   return cached;
 }
 
-export const adminDb = () => getFirestore(adminApp());
+let cachedDb: ReturnType<typeof getFirestore> | null = null;
+
+export function adminDb() {
+  if (cachedDb) return cachedDb;
+  const instance = getFirestore(adminApp());
+  // Firestore โยน error ถ้าเจอ undefined ในเอกสาร แต่ในโค้ดเรา undefined แปลว่า
+  // "ไม่ได้ตั้งค่านี้" ไม่ใช่ค่าที่ต้องเก็บ ให้ข้ามไปเลยเหมือนที่ JSON ทำ
+  // ที่เก็บข้อมูลสองแบบจะได้ทำงานเหมือนกัน ไม่ใช่พังเฉพาะบน Firestore
+  // ต้องเรียก settings() ก่อนใช้งานครั้งแรก และเรียกซ้ำไม่ได้ จึง cache ไว้
+  instance.settings({ ignoreUndefinedProperties: true });
+  cachedDb = instance;
+  return cachedDb;
+}
 export const adminAuth = () => getAuth(adminApp());
