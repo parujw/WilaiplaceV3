@@ -19,11 +19,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "โทเคนไม่ถูกต้อง" }, { status: 401 });
   }
 
-  // ล็อกอิน Google สำเร็จไม่พอ ต้องอยู่ในรายชื่อที่อนุญาตด้วย
+  // ค่าเริ่มต้นเปิดให้ทุกคนที่ล็อกอินผ่าน จะกลับมาจำกัดเมื่อไหร่ให้ตั้ง LOGIN_ALLOWLIST_ONLY=1
   const entry = await allowlistFor(email);
   if (!entry) {
     return NextResponse.json(
-      { error: `อีเมล ${email} ยังไม่ได้รับสิทธิ์เข้าใช้งาน — ให้เจ้าของเพิ่มใน allowlist ก่อน` },
+      { error: `อีเมล ${email} ยังไม่ได้รับสิทธิ์เข้าใช้งาน — ให้เจ้าของเพิ่มใน allowlist หรือใน OWNER_EMAILS ก่อน` },
       { status: 403 },
     );
   }

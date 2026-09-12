@@ -7,6 +7,7 @@ import { requireContext } from "@/lib/guard";
 import { isFirebaseConfigured, storeIsPersistent } from "@/lib/db";
 import { hasInvoiceSecret } from "@/lib/invoice-link";
 import { migrationIssues } from "@/lib/repo";
+import { isAllowlistRequired } from "@/lib/session";
 import { PropertyEditor } from "@/components/PropertyEditor";
 import { SignOutButton } from "./SettingsActions";
 
@@ -20,6 +21,7 @@ export default async function SettingsPage() {
   const firestore = isFirebaseConfigured();
   const persistent = storeIsPersistent();
   const invoiceSecretSet = hasInvoiceSecret();
+  const allowlistOnly = isAllowlistRequired();
 
   return (
     <AppShell>
@@ -39,6 +41,11 @@ export default async function SettingsPage() {
           </div>
           <Badge tone="accent">{ROLE_LABEL[user.role]}</Badge>
         </div>
+        <p className="mt-2 px-1 text-[12px] leading-relaxed text-muted">
+          {allowlistOnly
+            ? "ตอนนี้จำกัดให้เข้าได้เฉพาะอีเมลที่อยู่ในรายชื่อ (LOGIN_ALLOWLIST_ONLY=1)"
+            : "ตอนนี้ใครล็อกอินด้วย Google ก็เข้าได้ในฐานะเจ้าของ — จำกัดเฉพาะบางคนได้โดยตั้ง LOGIN_ALLOWLIST_ONLY=1"}
+        </p>
       </section>
 
       <section className="px-4 pt-6">

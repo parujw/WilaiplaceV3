@@ -35,15 +35,18 @@ cp .env.example .env.local     # เติมค่าให้ครบ
 ใน Firebase Console:
 
 1. เปิด **Authentication → Google Sign-in**
-2. สร้าง collection `allowlist` เพิ่ม document id เป็นอีเมลคุณ (ตัวพิมพ์เล็ก)
-   ```
-   { role: "owner", name: "ชื่อคุณ", propertyIds: [] }   // propertyIds ว่าง = ทุกอาคาร
-   ```
-   หรือจะข้ามขั้นนี้ก่อนก็ได้ โดยใส่อีเมลไว้ใน `OWNER_EMAILS` ของ `.env.local`
-3. Deploy rules
-   ```bash
-   firebase deploy --only firestore:rules,storage:rules
-   ```
+2. **Firestore Database → Create database** เลือก Production mode
+3. (ถ้าอยากใช้ rules ของโปรเจกต์นี้) `firebase deploy --only firestore:rules,storage:rules`
+   — ข้ามได้ rules แบบ Production mode ที่ Firebase ตั้งให้เองก็พอแล้ว
+   เพราะแอปเขียนผ่าน Admin SDK ฝั่งเซิร์ฟเวอร์ซึ่งไม่ผ่าน rules
+
+### ใครเข้าระบบได้บ้าง
+
+ค่าเริ่มต้น: **ใครล็อกอิน Google สำเร็จก็เข้าได้ในฐานะเจ้าของ** ไม่ต้องตั้ง allowlist
+แลกกับการที่ใครรู้ลิงก์และมีบัญชี Google ก็เข้าดูข้อมูลผู้เช่าได้
+
+อยากจำกัดเมื่อไหร่ ตั้ง `LOGIN_ALLOWLIST_ONLY=1` แล้ว Redeploy
+ระบบจะยอมเฉพาะอีเมลใน `OWNER_EMAILS` หรือใน collection `allowlist` เท่านั้น
 
 พอ `.env.local` ครบ ปุ่มโหมดสาธิตจะหายไปเองและเหลือแค่ปุ่มเข้าสู่ระบบด้วย Google
 

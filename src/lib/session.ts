@@ -50,17 +50,38 @@ function unpackDemoCookie(raw: string): SessionUser | null {
   }
 }
 
-/** ใครที่อนุญาตให้เข้าระบบ — ไม่มีในรายชื่อ = เข้าไม่ได้ ไม่ว่าจะล็อกอิน Google สำเร็จหรือไม่ */
+/**
+ * ใครเข้าระบบได้บ้าง
+ *
+ * ค่าเริ่มต้น: ใครล็อกอิน Google สำเร็จก็เข้าได้ในฐานะเจ้าของ ไม่ต้องตั้ง allowlist
+ * แลกกับการที่ใครรู้ลิงก์และมีบัญชี Google ก็เข้าดูข้อมูลผู้เช่าได้
+ *
+ * อยากจำกัดเมื่อไหร่ ตั้ง LOGIN_ALLOWLIST_ONLY=1 แล้วระบบจะยอมเฉพาะอีเมลที่อยู่ใน
+ * collection allowlist หรือใน OWNER_EMAILS เท่านั้น ไม่ต้องแก้โค้ด
+ *
+ * เอกสารใน allowlist ยังใช้กำหนด role และอาคารที่เข้าถึงได้เหมือนเดิม
+ * ต่างกันแค่ว่า "ไม่มีเอกสาร" ไม่ได้แปลว่า "ห้ามเข้า" อีกต่อไป
+ */
+export function isAllowlistRequired(): boolean {
+  return env("LOGIN_ALLOWLIST_ONLY") === "1";
+}
+
 async function allowlistFor(email: string): Promise<AllowlistEntry | null> {
-  const entry = await db().get<AllowlistEntry>("allowlist", email.toLowerCase());
+  const normalized = email.toLowerCase();
+
+  const entry = await db().get<AllowlistEntry>("allowlist", normalized);
   if (entry) return entry;
-  // เจ้าของคนแรก: ตั้งอีเมลไว้ใน env เพื่อให้เข้าได้ก่อนที่จะมี collection allowlist
-  const bootstrap = (env("OWNER_EMAILS") ?? "")
+
+  const owners = (env("OWNER_EMAILS") ?? "")
     .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-  if (bootstrap.includes(email.toLowerCase())) {
-    return { email, role: "owner", name: email, photoUrl: null, propertyIds: [] };
+  if (owners.includes(normalized)) {
+    return { email: normalized, role: "owner", name: "", photoUrl: null, propertyIds: [] };
   }
-  return null;
+
+  if (isAllowlistRequired()) return null;
+
+  // เปิดให้ทุกคนที่ล็อกอินผ่าน — propertyIds ว่าง = เข้าถึงได้ทุกอาคาร
+  return { email: normalized, role: "owner", name: "", photoUrl: null, propertyIds: [] };
 }
 
 export async function getSessionUser(): Promise<SessionUser | null> {

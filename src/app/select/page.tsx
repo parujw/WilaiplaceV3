@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Avatar, Badge, PropertyImage } from "@/components/ui";
 import { IconChevron, IconDoor, IconPin } from "@/components/icons";
@@ -28,11 +29,19 @@ export default async function SelectPropertyPage() {
 
       <div className="mt-7 space-y-3">
         {properties.length === 0 ? (
-          <div className="card px-6 py-10 text-center">
-            <p className="font-semibold">ยังไม่มีอาคารที่คุณเข้าถึงได้</p>
-            <p className="mt-1 text-sm text-muted">
-              ให้เจ้าของเพิ่มรหัสอาคารใน <code>allowlist</code> ของอีเมล {user.email}
+          <div className="card px-6 py-8 text-center">
+            <p className="text-[17px] font-bold">ยังไม่มีอาคารในระบบ</p>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
+              นำข้อมูลเดิมจากวิไลเพลส V2 เข้ามาก่อน แล้วห้อง ผู้เช่า สัญญา และบิลจะขึ้นครบทันที
             </p>
+            {user.role === "owner" ? (
+              <Link
+                href="/settings/migrate"
+                className="mt-5 block rounded-2xl bg-accent px-5 py-3.5 text-[15px] font-bold text-white"
+              >
+                ย้ายข้อมูลจาก V2
+              </Link>
+            ) : null}
           </div>
         ) : null}
 
