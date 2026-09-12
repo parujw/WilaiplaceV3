@@ -3,24 +3,36 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { IconGoogle } from "@/components/icons";
-import { firebaseReady, signInWithGoogle } from "@/lib/firebase-client";
+import type { FirebaseWebConfig } from "@/lib/firebase-config";
+import { signInWithGoogle } from "@/lib/firebase-client";
+
+/** บอกให้ชัดว่าแต่ละตัวไปหยิบมาจากหน้าไหนของ Firebase Console */
+const WHERE_FROM: Record<string, string> = {
+  NEXT_PUBLIC_FIREBASE_API_KEY: "Project settings → General → Your apps → Web app → apiKey",
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID: "Project settings → General → Project ID",
+  FIREBASE_CLIENT_EMAIL: "Project settings → Service accounts → Generate new private key → client_email ในไฟล์ JSON",
+  FIREBASE_PRIVATE_KEY: "ไฟล์ JSON เดียวกัน → private_key (วางทั้งก้อนรวมบรรทัด BEGIN/END)",
+};
 
 export function LoginForm({
   serverReady,
   demoAllowed,
   missingEnv,
+  webConfig,
 }: {
   serverReady: boolean;
   demoAllowed: boolean;
   /** ชื่อ env var ที่ยังไม่ได้ตั้ง — ชื่อตัวแปรอย่างเดียว ไม่ใช่ค่า */
   missingEnv: string[];
+  /** null = ตั้งค่าไม่ครบ ล็อกอิน Google ไม่ได้ */
+  webConfig: FirebaseWebConfig | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
 
-  const ready = serverReady && firebaseReady;
+  const ready = serverReady && webConfig !== null;
 
   async function post(url: string, body?: unknown) {
     const res = await fetch(url, {
@@ -35,7 +47,7 @@ export function LoginForm({
     setError(null);
     setBusy(true);
     try {
-      const idToken = await signInWithGoogle();
+      const idToken = await signInWithGoogle(webConfig!);
       await post("/api/auth/session", { idToken });
       startTransition(() => router.replace("/select"));
     } catch (err) {
@@ -102,15 +114,16 @@ export function LoginForm({
           {missingEnv.length > 0 ? (
             <div className="mt-4 rounded-xl bg-surface px-4 py-3 text-left">
               <p className="text-[12px] font-semibold text-muted">ยังขาด Environment Variables</p>
-              <ul className="mt-1.5 space-y-1">
+              <ul className="mt-2 space-y-2">
                 {missingEnv.map((name) => (
-                  <li key={name} className="font-mono text-[12px] text-accent-strong">
-                    {name}
+                  <li key={name}>
+                    <p className="font-mono text-[12px] font-semibold text-accent-strong">{name}</p>
+                    <p className="text-[11px] leading-relaxed text-muted">{WHERE_FROM[name]}</p>
                   </li>
                 ))}
               </ul>
-              <p className="mt-2 text-[11px] leading-relaxed text-muted">
-                ได้จาก Firebase Console → Project settings → Service accounts → Generate new private key
+              <p className="mt-3 text-[11px] leading-relaxed text-muted">
+                ใส่ใน Vercel → Settings → Environment Variables แล้ว Redeploy
               </p>
             </div>
           ) : null}

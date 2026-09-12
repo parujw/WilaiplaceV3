@@ -63,7 +63,10 @@ cp .env.example .env.local     # เติมค่าให้ครบ
 6. **Vercel → Deployments → Redeploy** — Vercel ไม่หยิบ env ใหม่ให้ deployment เดิม
 7. ล็อกอิน แล้วไป **ตั้งค่า → ย้ายข้อมูลจาก V2** อัปโหลดไฟล์ export
 
-หน้าล็อกอินจะบอกเองว่ายังขาด environment variable ตัวไหน
+หน้าล็อกอินจะบอกเองว่ายังขาด environment variable ตัวไหน และหยิบมาจากหน้าไหนของ Firebase Console
+
+Firebase web config (`apiKey`, `projectId`) ถูกอ่านตอนรันแล้วส่งให้หน้าเว็บ ไม่ได้ฝังตอน build
+ตั้งค่าแล้ว Redeploy ธรรมดาก็เข้าเลย ไม่ต้องกังวลเรื่อง build cache
 
 ## ย้ายข้อมูล V2 ขึ้น Firestore
 

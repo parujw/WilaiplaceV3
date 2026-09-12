@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getStorage } from "firebase-admin/storage";
 import { db } from "@/lib/db";
-import { adminApp, isFirebaseConfigured, storageBucket } from "@/lib/firebase-admin";
+import { adminApp, isFirebaseConfigured } from "@/lib/firebase-admin";
+import { storageBucket } from "@/lib/firebase-config";
 import { audit, getProperty } from "@/lib/repo";
 import { getSessionUser } from "@/lib/session";
 import type { Property } from "@/lib/types";

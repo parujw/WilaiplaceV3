@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { PropertyImage } from "@/components/ui";
-import { isFirebaseConfigured, missingFirebaseEnv } from "@/lib/firebase-admin";
+import { isFirebaseConfigured } from "@/lib/firebase-admin";
+import { missingFirebaseEnv, webConfig } from "@/lib/firebase-config";
 import { getSessionUser, isDemoLoginAllowed } from "@/lib/session";
 import { LoginForm } from "./LoginForm";
 
@@ -34,6 +35,7 @@ export default async function LoginPage() {
               serverReady={isFirebaseConfigured()}
               demoAllowed={isDemoLoginAllowed()}
               missingEnv={missingFirebaseEnv()}
+              webConfig={webConfig()}
             />
           </div>
         </div>
