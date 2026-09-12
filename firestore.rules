@@ -1,0 +1,57 @@
+rules_version = '2';
+
+/**
+ * Wilai Communities V3
+ *
+ * แอปเขียนข้อมูลผ่าน API ฝั่งเซิร์ฟเวอร์ (Admin SDK) เท่านั้น ซึ่งไม่ผ่านกฎชุดนี้
+ * กฎชุดนี้จึงมีไว้ปิดประตูฝั่ง client: ใครถือ API key ก็เข้าไม่ได้ถ้าไม่อยู่ใน allowlist
+ * และถึงอยู่ใน allowlist ก็อ่านได้อย่างเดียว
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+
+    function allowlisted() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/allowlist/$(request.auth.token.email.lower()));
+    }
+
+    function entry() {
+      return get(/databases/$(database)/documents/allowlist/$(request.auth.token.email.lower())).data;
+    }
+
+    /** propertyIds ว่าง = เข้าถึงได้ทุกอาคาร (เจ้าของ) */
+    function canReadProperty(propertyId) {
+      return allowlisted()
+        && (entry().propertyIds.size() == 0 || propertyId in entry().propertyIds);
+    }
+
+    match /allowlist/{email} {
+      // อ่านได้เฉพาะรายการของตัวเอง เพื่อไม่ให้ไล่ดูว่าใครมีสิทธิ์บ้าง
+      allow read: if signedIn() && email == request.auth.token.email.lower();
+      allow write: if false;
+    }
+
+    match /properties/{propertyId} {
+      allow read: if canReadProperty(propertyId);
+      allow write: if false;
+    }
+
+    match /{collection}/{docId} {
+      allow read: if allowlisted()
+        && collection in [
+          'rooms', 'tenants', 'leases', 'meterReadings', 'bills',
+          'payments', 'expenses', 'maintenance', 'utilityCosts'
+        ]
+        && canReadProperty(resource.data.propertyId);
+      allow write: if false;
+    }
+
+    // audit log และเลขรันแตะจากฝั่ง client ไม่ได้เลย
+    match /auditLogs/{logId} { allow read, write: if false; }
+    match /counters/{key}    { allow read, write: if false; }
+  }
+}

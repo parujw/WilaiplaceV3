@@ -1,0 +1,15 @@
+rules_version = '2';
+
+/**
+ * รูปผู้เช่าและรูปอาคาร
+ * อัปโหลดผ่าน API ฝั่งเซิร์ฟเวอร์เท่านั้น (Admin SDK ไม่ผ่านกฎชุดนี้)
+ * ไฟล์ถูกตั้งเป็น public เพื่อให้แสดงในแอปและในใบแจ้งหนี้ที่ผู้เช่าเปิดจากลิงก์ในไลน์
+ */
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

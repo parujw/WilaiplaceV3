@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #eeebe6;
+  --color-surface: #ffffff;
+  --color-surface-2: #f7f5f2;
+  --color-ink: #17171b;
+  --color-ink-2: #4a4a52;
+  --color-muted: #8d8d96;
+  --color-line: #e7e3dd;
+  --color-accent: #e8703a;
+  --color-accent-strong: #d9591f;
+  --color-accent-soft: #fdeee5;
+  --color-ok: #2f9e6d;
+  --color-warn: #d99e2b;
+  --color-danger: #d9503f;
+
+  --font-sans: var(--font-thai), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 1.25rem;
+  --shadow-card: 0 1px 2px rgb(23 23 27 / 0.04), 0 8px 24px -12px rgb(23 23 27 / 0.12);
+  --shadow-float: 0 4px 12px rgb(23 23 27 / 0.08), 0 16px 40px -16px rgb(23 23 27 / 0.28);
+}
+
+html {
+  background: var(--color-bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+}
+
+/* จอคอม: จัดให้อยู่กลางเหมือนถือมือถือ แต่ไม่บังคับความสูง */
+.app-frame {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 30rem;
+  min-height: 100dvh;
+  background: var(--color-bg);
+  position: relative;
+}
+
+@media (min-width: 40rem) {
+  body { background: #e4e0da; }
+  .app-frame { box-shadow: var(--shadow-float); }
+}
+
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+@media print {
+  .no-print { display: none !important; }
+  body, html, .app-frame { background: #fff; box-shadow: none; max-width: none; }
+}
