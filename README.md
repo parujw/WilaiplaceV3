@@ -47,12 +47,18 @@ cp .env.example .env.local     # เติมค่าให้ครบ
 
 พอ `.env.local` ครบ ปุ่มโหมดสาธิตจะหายไปเองและเหลือแค่ปุ่มเข้าสู่ระบบด้วย Google
 
+> Firebase web config (`apiKey`, `authDomain`, …) ไม่ใช่ความลับ มันถูกส่งไปกับหน้าเว็บอยู่แล้ว
+> ที่เป็นความลับจริงคือ Service Account JSON — `FIREBASE_PRIVATE_KEY` อย่า commit และอย่าส่งให้ใคร
+
 ### deploy ขึ้น Vercel
 
-ใส่ค่าเดียวกับ `.env.local` ใน Project Settings → Environment Variables ให้ครบ
-(`FIREBASE_PRIVATE_KEY` วางทั้งก้อนรวม `-----BEGIN PRIVATE KEY-----`)
-แล้วรัน `npm run migrate:v2` จากเครื่องตัวเองครั้งเดียวเพื่อดันข้อมูลขึ้น Firestore
-อย่าลืมเพิ่มโดเมนของ Vercel ใน Firebase Console → Authentication → Settings → Authorized domains
+1. Project Settings → Environment Variables ใส่ค่าชุดเดียวกับ `.env.local`
+   (`FIREBASE_PRIVATE_KEY` วางทั้งก้อนรวม `-----BEGIN PRIVATE KEY-----`)
+2. Redeploy — Vercel ไม่หยิบ env ใหม่ให้ deployment เดิม
+3. Firebase Console → Authentication → Settings → Authorized domains เพิ่มโดเมนของ Vercel
+4. รัน `npm run migrate:v2` จากเครื่องตัวเองครั้งเดียวเพื่อดันข้อมูลขึ้น Firestore
+
+หน้าล็อกอินจะบอกเองว่ายังขาด environment variable ตัวไหน
 
 ## ย้ายข้อมูล V2 ขึ้น Firestore
 

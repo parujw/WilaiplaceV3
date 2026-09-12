@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStorage } from "firebase-admin/storage";
 import { db } from "@/lib/db";
-import { adminApp, isFirebaseConfigured } from "@/lib/firebase-admin";
+import { adminApp, isFirebaseConfigured, storageBucket } from "@/lib/firebase-admin";
 import { audit } from "@/lib/repo";
 import { getSessionUser } from "@/lib/session";
 import type { Tenant } from "@/lib/types";
@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
   }
 
   let photoUrl: string;
-  const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
+  const bucketName = storageBucket();
 
   if (isFirebaseConfigured() && bucketName) {
     const ext = contentType.split("/")[1];

@@ -8,9 +8,12 @@ import { firebaseReady, signInWithGoogle } from "@/lib/firebase-client";
 export function LoginForm({
   serverReady,
   demoAllowed,
+  missingEnv,
 }: {
   serverReady: boolean;
   demoAllowed: boolean;
+  /** ชื่อ env var ที่ยังไม่ได้ตั้ง — ชื่อตัวแปรอย่างเดียว ไม่ใช่ค่า */
+  missingEnv: string[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -92,13 +95,29 @@ export function LoginForm({
           <p className="text-[15px] font-bold">ยังเข้าใช้งานไม่ได้</p>
           <p className="mt-2 text-[13px] leading-relaxed text-muted">
             เซิร์ฟเวอร์นี้ยังไม่ได้ตั้งค่า Firebase และโหมดสาธิตถูกปิดไว้
-            เพราะข้อมูลในระบบเป็นชื่อ เบอร์โทร และค่าเช่าจริงของผู้เช่า
+            เพราะข้อมูลในระบบเป็นชื่อและค่าเช่าจริงของผู้เช่า
             ถ้าเปิดไว้บนลิงก์สาธารณะใครก็เข้าดูได้
           </p>
-          <p className="mt-3 text-[13px] leading-relaxed text-muted">
-            ตั้งค่า Firebase ใน Environment Variables แล้ว deploy ใหม่
-            หรือถ้าตั้งใจจะเปิดให้ดูแบบสาธารณะจริงๆ ให้กำหนด{" "}
-            <code className="rounded bg-surface px-1">ALLOW_DEMO_LOGIN=1</code>
+
+          {missingEnv.length > 0 ? (
+            <div className="mt-4 rounded-xl bg-surface px-4 py-3 text-left">
+              <p className="text-[12px] font-semibold text-muted">ยังขาด Environment Variables</p>
+              <ul className="mt-1.5 space-y-1">
+                {missingEnv.map((name) => (
+                  <li key={name} className="font-mono text-[12px] text-accent-strong">
+                    {name}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[11px] leading-relaxed text-muted">
+                ได้จาก Firebase Console → Project settings → Service accounts → Generate new private key
+              </p>
+            </div>
+          ) : null}
+
+          <p className="mt-3 text-[12px] leading-relaxed text-muted">
+            ตั้งครบแล้ว deploy ใหม่อีกครั้ง หรือถ้าตั้งใจเปิดให้ดูแบบสาธารณะ ให้กำหนด{" "}
+            <code className="rounded bg-surface-2 px-1">ALLOW_DEMO_LOGIN=1</code>
           </p>
         </div>
       )}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStorage } from "firebase-admin/storage";
 import { db } from "@/lib/db";
-import { adminApp, isFirebaseConfigured } from "@/lib/firebase-admin";
+import { adminApp, isFirebaseConfigured, storageBucket } from "@/lib/firebase-admin";
 import { audit, getProperty } from "@/lib/repo";
 import { getSessionUser } from "@/lib/session";
 import type { Property } from "@/lib/types";
@@ -16,7 +16,7 @@ async function storePhoto(propertyId: string, dataUrl: string): Promise<string> 
   const bytes = Buffer.from(base64, "base64");
   if (bytes.byteLength > MAX_BYTES) throw new Error("ไฟล์ใหญ่เกินไป");
 
-  const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
+  const bucketName = storageBucket();
   if (!isFirebaseConfigured() || !bucketName) return dataUrl;
 
   const file = getStorage(adminApp()).bucket(bucketName).file(`properties/${propertyId}.${contentType.split("/")[1]}`);
