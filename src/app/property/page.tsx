@@ -35,7 +35,7 @@ export default async function PropertyPage() {
       </header>
 
       <div className="px-4">
-        <div className="card h-44 overflow-hidden">
+        <div className="card relative h-44 overflow-hidden">
           <PropertyImage photoUrl={property.photoUrl} name={property.name} />
         </div>
         <p className="mt-3 flex items-center gap-1.5 text-[14px] text-ink-2">

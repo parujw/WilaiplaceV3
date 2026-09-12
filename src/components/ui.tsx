@@ -134,41 +134,49 @@ export function RowLink({
   );
 }
 
-/** ภาพอาคาร — ใช้รูปจริงถ้ามี ไม่มีก็วาดตึกให้ดูไม่โล่ง */
+/**
+ * ภาพอาคาร — ใช้รูปจริงถ้ามี ไม่มีก็วาดตึกให้ดูไม่โล่ง
+ * วางตัวเองแบบ absolute กล่องที่ครอบต้องเป็น relative และกำหนดความสูงมาเอง
+ * viewBox สัดส่วน ~2:1 ใกล้เคียงกล่องที่ใช้จริง (h-64 / h-44 / h-40) ภาพจึงไม่ถูกซูมจนเสียรูป
+ */
 export function PropertyImage({
   photoUrl, name, className = "",
 }: { photoUrl?: string | null; name: string; className?: string }) {
   if (photoUrl) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={photoUrl} alt={name} className={`h-full w-full object-cover ${className}`} />;
+    return <img src={photoUrl} alt={name} className={`absolute inset-0 h-full w-full object-cover ${className}`} />;
   }
+
+  const WINDOW = "#ffd9a8";
+  const blocks = [
+    { x: 14, y: 62, w: 80, h: 83, cols: 3, rows: 4, cx: 24, cy: 68 },
+    { x: 104, y: 38, w: 100, h: 107, cols: 4, rows: 5, cx: 114, cy: 44 },
+    { x: 212, y: 72, w: 84, h: 73, cols: 3, rows: 3, cx: 222, cy: 80 },
+  ];
+
   return (
-    <div className={`relative h-full w-full overflow-hidden bg-gradient-to-b from-[#f4b183] via-[#e8703a] to-[#b34a1f] ${className}`}>
-      <svg viewBox="0 0 320 180" preserveAspectRatio="xMidYMax slice" className="absolute inset-0 h-full w-full">
-        <circle cx="258" cy="42" r="20" fill="#fff" opacity="0.5" />
-        <g fill="#2b2118" opacity="0.88">
-          <rect x="18" y="74" width="74" height="106" rx="4" />
-          <rect x="104" y="46" width="96" height="134" rx="4" />
-          <rect x="212" y="86" width="88" height="94" rx="4" />
+    <div className={`absolute inset-0 overflow-hidden bg-gradient-to-b from-[#ffcf9c] via-[#ef8450] to-[#b34a1f] ${className}`}>
+      <svg viewBox="0 0 300 145" preserveAspectRatio="xMidYMax slice" className="absolute inset-0 h-full w-full">
+        <circle cx="248" cy="28" r="15" fill="#fff" opacity="0.55" />
+        <g fill="#2b2118" opacity="0.9">
+          {blocks.map((b) => <rect key={b.x} x={b.x} y={b.y} width={b.w} height={b.h} rx="3" />)}
         </g>
-        <g fill="#ffd9a8">
-          {[0, 1, 2, 3].map((row) =>
-            [0, 1, 2].map((col) => (
-              <rect key={`a${row}${col}`} x={30 + col * 20} y={86 + row * 22} width="11" height="13" rx="1.5"
-                opacity={(row + col) % 3 === 0 ? 0.35 : 0.95} />
-            )),
-          )}
-          {[0, 1, 2, 3, 4].map((row) =>
-            [0, 1, 2, 3].map((col) => (
-              <rect key={`b${row}${col}`} x={117 + col * 21} y={60 + row * 23} width="12" height="14" rx="1.5"
-                opacity={(row * 2 + col) % 4 === 0 ? 0.3 : 0.95} />
-            )),
-          )}
-          {[0, 1, 2, 3].map((row) =>
-            [0, 1, 2].map((col) => (
-              <rect key={`c${row}${col}`} x={226 + col * 24} y={98 + row * 22} width="12" height="14" rx="1.5"
-                opacity={(row + col) % 2 === 0 ? 0.9 : 0.35} />
-            )),
+        <g fill={WINDOW}>
+          {blocks.flatMap((b) =>
+            Array.from({ length: b.rows }, (_, row) =>
+              Array.from({ length: b.cols }, (_, col) => (
+                <rect
+                  key={`${b.x}-${row}-${col}`}
+                  x={b.cx + col * 22}
+                  y={b.cy + row * 18}
+                  width="12"
+                  height="12"
+                  rx="1.5"
+                  // สุ่มแบบคงที่ ให้ไฟบางห้องดับ ภาพจะดูมีชีวิตกว่าเปิดหมด
+                  opacity={(row * 3 + col * 2 + b.cols) % 4 === 0 ? 0.3 : 0.95}
+                />
+              )),
+            ),
           )}
         </g>
       </svg>

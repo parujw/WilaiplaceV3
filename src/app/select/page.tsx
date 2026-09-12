@@ -42,7 +42,7 @@ export default async function SelectPropertyPage() {
           return (
             <PropertyPicker key={property.id} propertyId={property.id}>
               <article className="card overflow-hidden">
-                <div className="relative h-32">
+                <div className="relative h-40">
                   <PropertyImage photoUrl={property.photoUrl} name={property.name} />
                   <div className="absolute left-3 top-3">
                     <span className="rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-sm">
