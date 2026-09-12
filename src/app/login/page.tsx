@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { PropertyImage } from "@/components/ui";
 import { isFirebaseConfigured } from "@/lib/firebase-admin";
-import { getSessionUser } from "@/lib/session";
+import { getSessionUser, isDemoLoginAllowed } from "@/lib/session";
 import { LoginForm } from "./LoginForm";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export default async function LoginPage() {
             จดมิเตอร์ ออกบิล รับชำระ และดูแลผู้เช่า — ข้อมูลเดิมจากวิไลเพลส V2 ย้ายมาครบแล้ว
           </p>
           <div className="mt-6">
-            <LoginForm serverReady={isFirebaseConfigured()} />
+            <LoginForm serverReady={isFirebaseConfigured()} demoAllowed={isDemoLoginAllowed()} />
           </div>
         </div>
 

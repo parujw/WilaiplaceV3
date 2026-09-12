@@ -10,6 +10,19 @@ export const DEMO_COOKIE = "wlp_demo";
 export const PROPERTY_COOKIE = "wlp_property";
 const MAX_AGE = 60 * 60 * 24 * 14; // 14 วัน
 
+/**
+ * โหมดสาธิตเปิดได้เมื่อไหร่
+ *
+ * ข้อมูลในนี้เป็นชื่อจริง เบอร์จริง ค่าเช่าจริงของผู้เช่า ถ้าเปิดบน URL สาธารณะ
+ * ใครกดปุ่มก็เข้าดูได้หมด จึงปิดไว้เป็นค่าเริ่มต้นเมื่อรันแบบ production
+ * อยากเปิดจริงๆ ต้องตั้ง ALLOW_DEMO_LOGIN=1 เอง
+ */
+export function isDemoLoginAllowed(): boolean {
+  if (isFirebaseConfigured()) return false; // ตั้งค่าจริงแล้ว ให้ล็อกอิน Google เท่านั้น
+  if (process.env.ALLOW_DEMO_LOGIN === "1") return true;
+  return process.env.NODE_ENV !== "production";
+}
+
 function secret(): string {
   return process.env.AUTH_SECRET ?? "wilai-communities-dev-secret";
 }
@@ -52,9 +65,9 @@ async function allowlistFor(email: string): Promise<AllowlistEntry | null> {
 export async function getSessionUser(): Promise<SessionUser | null> {
   const jar = await cookies();
 
-  // คุกกี้สาธิตใช้ได้เฉพาะตอนที่ยังไม่ได้ตั้งค่า Firebase
-  // ตั้งค่าเมื่อไหร่ คุกกี้เก่า (หรือที่ปลอมขึ้นมา) หมดความหมายทันที
-  if (!isFirebaseConfigured()) {
+  // คุกกี้สาธิตใช้ได้เฉพาะตอนที่เปิดโหมดสาธิตอยู่
+  // ปิดโหมดเมื่อไหร่ คุกกี้เก่า (หรือที่ปลอมขึ้นมา) หมดความหมายทันที
+  if (isDemoLoginAllowed()) {
     const demo = jar.get(DEMO_COOKIE)?.value;
     if (demo) return unpackDemoCookie(demo);
   }

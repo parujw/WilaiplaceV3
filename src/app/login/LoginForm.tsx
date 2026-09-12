@@ -5,7 +5,13 @@ import { useState, useTransition } from "react";
 import { IconGoogle } from "@/components/icons";
 import { firebaseReady, signInWithGoogle } from "@/lib/firebase-client";
 
-export function LoginForm({ serverReady }: { serverReady: boolean }) {
+export function LoginForm({
+  serverReady,
+  demoAllowed,
+}: {
+  serverReady: boolean;
+  demoAllowed: boolean;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -65,7 +71,7 @@ export function LoginForm({ serverReady }: { serverReady: boolean }) {
           </span>
           {disabled ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบด้วย Google"}
         </button>
-      ) : (
+      ) : demoAllowed ? (
         <>
           <button
             type="button"
@@ -81,6 +87,20 @@ export function LoginForm({ serverReady }: { serverReady: boolean }) {
             ตั้งค่า <code className="rounded bg-surface-2 px-1">.env.local</code> แล้วปุ่ม Google จะขึ้นมาแทน
           </p>
         </>
+      ) : (
+        <div className="rounded-2xl bg-surface-2 px-5 py-5 text-center">
+          <p className="text-[15px] font-bold">ยังเข้าใช้งานไม่ได้</p>
+          <p className="mt-2 text-[13px] leading-relaxed text-muted">
+            เซิร์ฟเวอร์นี้ยังไม่ได้ตั้งค่า Firebase และโหมดสาธิตถูกปิดไว้
+            เพราะข้อมูลในระบบเป็นชื่อ เบอร์โทร และค่าเช่าจริงของผู้เช่า
+            ถ้าเปิดไว้บนลิงก์สาธารณะใครก็เข้าดูได้
+          </p>
+          <p className="mt-3 text-[13px] leading-relaxed text-muted">
+            ตั้งค่า Firebase ใน Environment Variables แล้ว deploy ใหม่
+            หรือถ้าตั้งใจจะเปิดให้ดูแบบสาธารณะจริงๆ ให้กำหนด{" "}
+            <code className="rounded bg-surface px-1">ALLOW_DEMO_LOGIN=1</code>
+          </p>
+        </div>
       )}
 
       {error ? (

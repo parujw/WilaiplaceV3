@@ -1,7 +1,7 @@
 import "server-only";
 import { isFirebaseConfigured } from "../firebase-admin";
 import { firestoreStore } from "./firestore";
-import { localStore } from "./local";
+import { localStore, localStoreIsPersistent } from "./local";
 import type { Store } from "./store";
 
 /**
@@ -11,6 +11,11 @@ import type { Store } from "./store";
  */
 export function db(): Store {
   return isFirebaseConfigured() ? firestoreStore : localStore;
+}
+
+/** true = แก้ไขแล้วข้อมูลค้างอยู่ / false = อยู่ในหน่วยความจำ หายเมื่อเซิร์ฟเวอร์รีสตาร์ต */
+export function storeIsPersistent(): boolean {
+  return isFirebaseConfigured() || localStoreIsPersistent();
 }
 
 export { isFirebaseConfigured };

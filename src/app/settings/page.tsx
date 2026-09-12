@@ -4,7 +4,7 @@ import { IconBack } from "@/components/icons";
 import { Avatar, Badge, SectionHeader } from "@/components/ui";
 import { baht } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
-import { isFirebaseConfigured } from "@/lib/db";
+import { isFirebaseConfigured, storeIsPersistent } from "@/lib/db";
 import { migrationIssues } from "@/lib/repo";
 import { PropertyEditor } from "@/components/PropertyEditor";
 import { SignOutButton } from "./SettingsActions";
@@ -17,6 +17,7 @@ export default async function SettingsPage() {
   const { user, property, properties } = await requireContext();
   const issues = await migrationIssues();
   const firestore = isFirebaseConfigured();
+  const persistent = storeIsPersistent();
 
   return (
     <AppShell>
@@ -71,13 +72,23 @@ export default async function SettingsPage() {
         <SectionHeader title="ที่เก็บข้อมูล" />
         <div className="card p-4">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[15px] font-bold">{firestore ? "Firebase Firestore" : "ไฟล์ในเครื่อง (โหมดสาธิต)"}</p>
-            <Badge tone={firestore ? "ok" : "warn"}>{firestore ? "พร้อมใช้งานจริง" : "สาธิต"}</Badge>
+            <p className="text-[15px] font-bold">
+              {firestore
+                ? "Firebase Firestore"
+                : persistent
+                  ? "ไฟล์ในเครื่อง (โหมดสาธิต)"
+                  : "หน่วยความจำ (โหมดสาธิต)"}
+            </p>
+            <Badge tone={firestore ? "ok" : persistent ? "warn" : "danger"}>
+              {firestore ? "พร้อมใช้งานจริง" : "สาธิต"}
+            </Badge>
           </div>
           <p className="mt-2 text-[13px] leading-relaxed text-muted">
             {firestore
               ? "ข้อมูลทั้งหมดอยู่บน Firestore และทุกการเขียนมี audit log กำกับ"
-              : "ข้อมูล V2 ถูกย้ายเข้าไฟล์ data/local-store.json บนเครื่องนี้ ตั้งค่า .env.local แล้วรัน npm run migrate:v2 เพื่อย้ายขึ้น Firestore"}
+              : persistent
+                ? "ข้อมูล V2 ถูกย้ายเข้าไฟล์ data/local-store.json บนเครื่องนี้ ตั้งค่า .env.local แล้วรัน npm run migrate:v2 เพื่อย้ายขึ้น Firestore"
+                : "เซิร์ฟเวอร์นี้เขียนไฟล์ไม่ได้ ข้อมูลจึงอยู่ในหน่วยความจำอย่างเดียว — สิ่งที่แก้จะหายเมื่อเซิร์ฟเวอร์รีสตาร์ต ห้ามใช้เก็บงานจริง ให้ตั้งค่า Firebase ก่อน"}
           </p>
         </div>
       </section>
