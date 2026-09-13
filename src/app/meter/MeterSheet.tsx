@@ -19,7 +19,10 @@ export interface MeterRow {
   elecPrevious: number;
   waterPrevious: number;
   carryOver: number;
+  /** เลขที่บิลค่าเช่าของรอบนี้ ถ้ามีแล้วห้องนี้ถือว่าจบ */
   billedBillNo: string | null;
+  /** บิลอื่นของรอบนี้ที่ไม่มีค่าเช่า เช่น มัดจำหรือค่าซ่อม — ยังต้องออกบิลค่าเช่าต่อ */
+  otherBillNos: string[];
 }
 
 type Entry = { elec: string; water: string };
@@ -175,12 +178,34 @@ export function MeterSheet({ cycle, rows }: { cycle: string; rows: MeterRow[] })
 
       {rows.some((r) => r.billedBillNo) ? (
         <div className="card p-4">
-          <p className="mb-2 text-[13px] font-bold text-muted">ออกบิลรอบนี้แล้ว</p>
+          <p className="mb-1 text-[13px] font-bold text-muted">ออกบิลค่าเช่ารอบนี้แล้ว</p>
+          <p className="mb-2.5 text-[11px] leading-relaxed text-muted">
+            ห้องเหล่านี้ไม่ขึ้นในรายการข้างบนแล้ว เพราะออกบิลค่าเช่าของรอบนี้ไปแล้ว
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {rows.filter((r) => r.billedBillNo).map((r) => (
               <span key={r.roomId} className="rounded-full bg-surface-2 px-2.5 py-1 text-[12px] font-semibold">
                 {r.roomNo}
               </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* บิลที่ไม่มีค่าเช่า (มัดจำ ค่าซ่อม) ไม่บล็อกการออกบิลค่าเช่า
+          แต่ต้องบอกให้เห็น ไม่งั้นจะไม่รู้ว่าเดือนนี้เคยออกใบอะไรให้ห้องนั้นไปแล้ว */}
+      {rows.some((r) => r.otherBillNos.length > 0) ? (
+        <div className="card p-4">
+          <p className="mb-1 text-[13px] font-bold text-muted">มีบิลอื่นของรอบนี้อยู่แล้ว</p>
+          <p className="mb-2.5 text-[11px] leading-relaxed text-muted">
+            เช่น ค่ามัดจำหรือค่าซ่อม ห้องเหล่านี้ยังออกบิลค่าเช่าได้ตามปกติ
+          </p>
+          <div className="space-y-1">
+            {rows.filter((r) => r.otherBillNos.length > 0).map((r) => (
+              <p key={r.roomId} className="text-[12px]">
+                <span className="font-semibold">ห้อง {r.roomNo}</span>
+                <span className="text-muted"> · {r.otherBillNos.join(", ")}</span>
+              </p>
             ))}
           </div>
         </div>

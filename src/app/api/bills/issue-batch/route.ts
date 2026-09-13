@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildBill, dueDateFor, lastReadingFor } from "@/lib/billing";
+import { buildBill, dueDateFor, hasRentBill, lastReadingFor } from "@/lib/billing";
 import { db } from "@/lib/db";
 import { audit, getRoomViews, listBills, listMeterReadings, nextBillNo } from "@/lib/repo";
 import { getSelectedPropertyId, getSessionUser } from "@/lib/session";
@@ -41,7 +41,10 @@ export async function POST(request: Request) {
   ]);
 
   const viewByRoom = new Map(views.map((v) => [v.room.id, v]));
-  const billedRooms = new Set(existing.filter((b) => b.status !== "void").map((b) => b.roomId));
+  // บล็อกเฉพาะห้องที่มีบิลค่าเช่าของรอบนี้แล้ว บิลมัดจำหรือบิลค่าซ่อมไม่นับ
+  const rentBilled = new Set(
+    views.filter((v) => hasRentBill(existing, v.room.id, cycle)).map((v) => v.room.id),
+  );
 
   const ops: WriteOp[] = [];
   const created: Array<{ roomNo: string; billNo: string; total: number }> = [];
@@ -58,8 +61,8 @@ export async function POST(request: Request) {
       skipped.push(`ห้อง ${room.roomNo}: ไม่มีสัญญาที่ใช้งานอยู่`);
       continue;
     }
-    if (billedRooms.has(room.id)) {
-      skipped.push(`ห้อง ${room.roomNo}: ออกบิลรอบนี้ไปแล้ว`);
+    if (rentBilled.has(room.id)) {
+      skipped.push(`ห้อง ${room.roomNo}: ออกบิลค่าเช่ารอบนี้ไปแล้ว`);
       continue;
     }
 

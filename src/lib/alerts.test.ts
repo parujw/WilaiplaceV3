@@ -29,7 +29,8 @@ const bill = (over: Partial<Bill> = {}): Bill => ({
   id: "B1", propertyId: "wlp1", billNo: "BILL-202608-0001", invoiceNo: "INV-202608-0001",
   cycle: "202609", roomId: "wlp1-101", roomNo: "101", leaseId: "L-T0001",
   tenantSnapshot: { tenantId: "T0001", name: "คุณสมชาย", phone: "" },
-  lines: [], total: 3200, paid: 0, balance: 3200, status: "unpaid",
+  lines: [{ type: "rent", label: "ค่าเช่าห้อง", qty: 1, rate: 3200, amount: 3200 }],
+  total: 3200, paid: 0, balance: 3200, status: "unpaid",
   issuedAt: "2026-08-31", dueDate: "2026-09-05", sentToLineAt: null, ...over,
 });
 
@@ -72,21 +73,39 @@ describe("บิลเกินกำหนด", () => {
 });
 
 describe("บิลที่ยังไม่ได้ออก", () => {
-  it("ห้องมีคนอยู่แต่ไม่มีบิลรอบนี้", () => {
-    expect(ids(input())).toContain("unbilled-202609");
+  // รอบการทำงานจริงคือจดมิเตอร์สัปดาห์สุดท้ายแล้วค่อยออกบิล เทสต์จึงยืนที่ปลายเดือน
+  const LATE = new Date("2026-09-26T00:00:00Z");
+  const late = (over: Partial<AlertInput> = {}) => input({ today: LATE, ...over });
+
+  it("ปลายเดือนแล้วยังไม่ออกบิล ต้องเตือน", () => {
+    expect(ids(late())).toContain("unbilled-202609");
+  });
+
+  it("ต้นเดือนยังไม่ต้องเตือน — ยังไม่ถึงรอบจดมิเตอร์ เตือนไปก็ทำอะไรไม่ได้", () => {
+    expect(ids(input({ today: new Date("2026-09-03T00:00:00Z") }))).not.toContain("unbilled-202609");
+    expect(ids(input({ today: new Date("2026-09-13T00:00:00Z") }))).not.toContain("unbilled-202609");
+  });
+
+  it("รอบที่ผ่านไปแล้วเตือนทันที ไม่ต้องรอปลายเดือน", () => {
+    expect(ids(input({ cycle: "202608", today: new Date("2026-09-13T00:00:00Z") }))).toContain("unbilled-202608");
   });
 
   it("ออกบิลครบแล้วไม่ขึ้น", () => {
-    expect(ids(input({ bills: [bill()] }))).not.toContain("unbilled-202609");
+    expect(ids(late({ bills: [bill()] }))).not.toContain("unbilled-202609");
   });
 
   it("บิลที่ยกเลิกไม่นับว่าออกแล้ว", () => {
-    expect(ids(input({ bills: [bill({ status: "void" })] }))).toContain("unbilled-202609");
+    expect(ids(late({ bills: [bill({ status: "void" })] }))).toContain("unbilled-202609");
+  });
+
+  it("บิลมัดจำไม่นับว่าออกบิลค่าเช่าแล้ว", () => {
+    const deposit = bill({ lines: [{ type: "deposit", label: "ค่ามัดจำ", qty: 1, rate: 5000, amount: 5000 }] });
+    expect(ids(late({ bills: [deposit] }))).toContain("unbilled-202609");
   });
 
   it("ห้องว่างไม่นับว่ายังไม่ได้ออกบิล", () => {
     const vacant = view({ room: room({ activeLeaseId: null }), lease: null, tenant: null });
-    expect(ids(input({ views: [vacant], leases: [] }))).not.toContain("unbilled-202609");
+    expect(ids(late({ views: [vacant], leases: [] }))).not.toContain("unbilled-202609");
   });
 });
 
@@ -130,6 +149,7 @@ describe("เรื่องอื่น", () => {
 describe("badgeCount", () => {
   it("นับเฉพาะเรื่องที่ต้องรีบ ห้องว่างกับข้อมูลไม่ครบไม่นับ", () => {
     const alerts = buildAlerts(input({
+      today: new Date("2026-09-26T00:00:00Z"),
       // บิลค้างเป็นของรอบก่อน รอบนี้จึงยังไม่ได้ออกบิลด้วย
       bills: [bill({ cycle: "202608", dueDate: "2026-08-01" })],
       views: [view(), view({ room: room({ id: "r2", activeLeaseId: null }), lease: null, tenant: null })],

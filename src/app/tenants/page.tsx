@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { IconUsers } from "@/components/icons";
+import { PendingSwap } from "@/components/LinkPending";
 import { Avatar, Badge, EmptyState, SectionHeader } from "@/components/ui";
 import { baht, thaiDate } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
@@ -66,7 +67,9 @@ export default async function TenantsPage() {
                     </p>
                     <p className="mt-0.5 text-[12px] text-muted">สัญญาถึง {thaiDate(lease.endDate)}</p>
                   </div>
-                  {outstanding > 0 ? <Badge tone="danger">ค้าง {baht(outstanding)}</Badge> : <Badge tone="ok">ปกติ</Badge>}
+                  <PendingSwap>
+                    {outstanding > 0 ? <Badge tone="danger">ค้าง {baht(outstanding)}</Badge> : <Badge tone="ok">ปกติ</Badge>}
+                  </PendingSwap>
                 </Link>
               );
             })}

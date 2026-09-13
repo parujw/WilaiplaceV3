@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agingBucket, buildBill, dueDateFor, meterUnits, nextCycle, previousCycle } from "./billing";
+import type { Bill } from "./types";
+import { agingBucket, buildBill, dueDateFor, meterUnits, nextCycle, previousCycle, hasRentBill } from "./billing";
 
 const lease = {
   rent: 3500,
@@ -71,5 +72,41 @@ describe("agingBucket", () => {
     expect(agingBucket(15)).toBe("1-30");
     expect(agingBucket(45)).toBe("31-60");
     expect(agingBucket(90)).toBe("60+");
+  });
+});
+
+
+describe("hasRentBill", () => {
+  const bill = (over: Partial<Bill> = {}): Bill => ({
+    id: "B1", propertyId: "wlp1", billNo: "BILL-202609-0001", invoiceNo: "INV-202609-0001",
+    cycle: "202609", roomId: "wlp1-101", roomNo: "101", leaseId: "L1",
+    tenantSnapshot: { tenantId: "T1", name: "ผู้เช่า", phone: "" },
+    lines: [{ type: "rent", label: "ค่าเช่าห้อง", qty: 1, rate: 3000, amount: 3000 }],
+    total: 3000, paid: 0, balance: 3000, status: "unpaid",
+    issuedAt: "2026-09-25", dueDate: "2026-10-05", sentToLineAt: null, ...over,
+  });
+
+  const deposit = (over: Partial<Bill> = {}) =>
+    bill({ id: "B2", lines: [{ type: "deposit", label: "ค่ามัดจำ", qty: 1, rate: 5000, amount: 5000 }], ...over });
+
+  it("มีบิลค่าเช่าของรอบนั้นแล้ว", () => {
+    expect(hasRentBill([bill()], "wlp1-101", "202609")).toBe(true);
+  });
+
+  it("บิลมัดจำไม่นับเป็นบิลค่าเช่า — เคสที่เคยทำให้ออกบิลค่าเช่าไม่ได้ทั้งเดือน", () => {
+    expect(hasRentBill([deposit()], "wlp1-101", "202609")).toBe(false);
+  });
+
+  it("มีทั้งบิลมัดจำและบิลค่าเช่า = ออกแล้ว", () => {
+    expect(hasRentBill([deposit(), bill()], "wlp1-101", "202609")).toBe(true);
+  });
+
+  it("บิลที่ยกเลิกแล้วไม่นับ", () => {
+    expect(hasRentBill([bill({ status: "void" })], "wlp1-101", "202609")).toBe(false);
+  });
+
+  it("คนละห้องหรือคนละรอบไม่นับ", () => {
+    expect(hasRentBill([bill()], "wlp1-102", "202609")).toBe(false);
+    expect(hasRentBill([bill()], "wlp1-101", "202608")).toBe(false);
   });
 });

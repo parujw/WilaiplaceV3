@@ -44,6 +44,30 @@ export interface AlertInput {
 /** สัญญาที่จะหมดอายุภายในกี่วันถึงถือว่าต้องเริ่มคุยเรื่องต่อสัญญา */
 const EXPIRY_WARNING_DAYS = 60;
 
+/**
+ * เริ่มเตือนเรื่องออกบิลก่อนสิ้นเดือนกี่วัน
+ *
+ * รอบการทำงานจริงคือเดินจดมิเตอร์ช่วงสัปดาห์สุดท้ายของเดือน แล้วค่อยออกบิล
+ * ถ้าเตือนตั้งแต่วันที่ 1 ว่า "ยังไม่ได้ออกบิล 13 ห้อง" มันจะค้างอยู่ทั้งเดือน
+ * คนใช้จะเลิกอ่านการแจ้งเตือนไปเลย เพราะมีของที่ยังทำไม่ได้ค้างอยู่ตลอด
+ */
+const BILLING_WINDOW_DAYS = 7;
+
+/** วันนี้อยู่ในช่วงที่ควรออกบิลของรอบนั้นแล้วหรือยัง */
+function inBillingWindow(cycle: Cycle, today: Date): boolean {
+  const year = Number(cycle.slice(0, 4));
+  const month = Number(cycle.slice(4, 6));
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return true;
+
+  // รอบที่ผ่านไปแล้วคือเลยกำหนดมาแล้ว ต้องเตือนทันทีไม่ต้องรอ
+  const lastDay = new Date(year, month, 0).getDate();
+  const endOfCycle = new Date(year, month - 1, lastDay);
+  if (today > endOfCycle) return true;
+
+  const startWarning = new Date(year, month - 1, Math.max(1, lastDay - BILLING_WINDOW_DAYS + 1));
+  return today >= startWarning;
+}
+
 export function buildAlerts(input: AlertInput): Alert[] {
   const today = input.today ?? new Date();
   const cycle = input.cycle ?? currentCycle(today);
@@ -67,9 +91,14 @@ export function buildAlerts(input: AlertInput): Alert[] {
   }
 
   /* --- ห้องที่มีคนอยู่แต่ยังไม่ได้ออกบิลรอบนี้ --- */
-  const billedRooms = new Set(input.bills.filter((b) => b.cycle === cycle && b.status !== "void").map((b) => b.roomId));
+  // นับเฉพาะบิลที่มีค่าเช่า บิลมัดจำหรือค่าซ่อมไม่ได้แปลว่าออกบิลของเดือนนั้นแล้ว
+  const billedRooms = new Set(
+    input.bills
+      .filter((b) => b.cycle === cycle && b.status !== "void" && b.lines.some((l) => l.type === "rent"))
+      .map((b) => b.roomId),
+  );
   const unbilled = input.views.filter((v) => v.lease && !billedRooms.has(v.room.id));
-  if (unbilled.length > 0) {
+  if (unbilled.length > 0 && inBillingWindow(cycle, today)) {
     alerts.push({
       id: `unbilled-${cycle}`,
       level: "warn",

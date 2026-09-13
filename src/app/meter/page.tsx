@@ -26,7 +26,18 @@ export default async function MeterPage({
   ]);
 
   const live = billsAll.filter((b) => b.status !== "void");
-  const billedThisCycle = new Map(live.filter((b) => b.cycle === cycle).map((b) => [b.roomId, b.billNo]));
+  // ออกบิลค่าเช่าไปแล้วเท่านั้นที่ถือว่าจบ บิลมัดจำหรือบิลค่าซ่อมยังต้องออกค่าเช่าต่อ
+  const rentBillNo = new Map(
+    live
+      .filter((b) => b.cycle === cycle && b.lines.some((l) => l.type === "rent"))
+      .map((b) => [b.roomId, b.billNo]),
+  );
+  // บิลอื่นของรอบนี้เอาไว้บอกว่าห้องนั้นมีใบอะไรออกไปแล้วบ้าง จะได้ไม่ออกซ้ำโดยไม่รู้ตัว
+  const otherBills = new Map<string, string[]>();
+  for (const b of live) {
+    if (b.cycle !== cycle || b.lines.some((l) => l.type === "rent")) continue;
+    otherBills.set(b.roomId, [...(otherBills.get(b.roomId) ?? []), b.billNo]);
+  }
 
   const rows: MeterRow[] = views
     .filter((v) => v.lease && v.tenant)
@@ -50,7 +61,8 @@ export default async function MeterPage({
         elecPrevious: previous?.elecCurrent ?? 0,
         waterPrevious: previous?.waterCurrent ?? 0,
         carryOver,
-        billedBillNo: billedThisCycle.get(v.room.id) ?? null,
+        billedBillNo: rentBillNo.get(v.room.id) ?? null,
+        otherBillNos: otherBills.get(v.room.id) ?? [],
       };
     });
 

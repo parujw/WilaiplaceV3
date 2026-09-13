@@ -74,6 +74,13 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* ลิงก์ที่มีไฟกำลังโหลดอยู่ข้างใน = กำลังพาไปหน้าใหม่ หรี่ทั้งใบให้รู้ว่ากดติดแล้ว
+   จุดเล็กๆ หมุนอย่างเดียวมองไม่เห็นบนการ์ดใหญ่ๆ อย่างรายชื่อผู้เช่า */
+a:has(.spinner) {
+  opacity: 0.55;
+  transition: opacity 0.12s;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation-duration: 1.8s; }
 }

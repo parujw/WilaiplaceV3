@@ -3,7 +3,7 @@
  * ทุกอย่างในไฟล์นี้ทดสอบได้ด้วย vitest
  */
 
-import type { BillLine, Cycle, Lease, MeterReading } from "./types";
+import type { Bill, BillLine, Cycle, Lease, MeterReading } from "./types";
 
 export interface BillInput {
   lease: Pick<Lease, "rent" | "rates" | "dueDay">;
@@ -128,6 +128,25 @@ export function agingBucket(days: number): "current" | "1-30" | "31-60" | "60+" 
   if (days <= 30) return "1-30";
   if (days <= 60) return "31-60";
   return "60+";
+}
+
+/**
+ * ห้องนี้ออกบิลค่าเช่าของรอบนี้ไปแล้วหรือยัง
+ *
+ * ดูที่ "มีรายการค่าเช่าอยู่ในบิล" ไม่ใช่ "มีบิลของรอบนี้"
+ * เพราะบิลที่ไม่มีค่าเช่ามีอยู่จริงและไม่ควรบล็อกบิลค่าเช่า เช่น
+ *   เก็บค่ามัดจำตอนจอง แล้วค่อยออกบิลค่าเช่าปลายเดือน
+ *   ออกบิลค่าซ่อมของเสียหายแยกใบ
+ * ของเดิมนับทุกใบ พอออกบิลมัดจำไปแล้วห้องนั้นจะออกบิลค่าเช่าไม่ได้ทั้งเดือน
+ */
+export function hasRentBill(bills: Bill[], roomId: string, cycle: Cycle): boolean {
+  return bills.some(
+    (b) =>
+      b.roomId === roomId &&
+      b.cycle === cycle &&
+      b.status !== "void" &&
+      b.lines.some((l) => l.type === "rent"),
+  );
 }
 
 export function lastReadingFor(readings: MeterReading[], roomId: string, beforeCycle: Cycle): MeterReading | null {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { LinkSpinner } from "@/components/LinkPending";
 import { IconBack, IconGauge, IconPin } from "@/components/icons";
 import { Avatar, Badge, PropertyImage, SectionHeader, StatCard } from "@/components/ui";
 import { baht, compactBaht, cycleLabel } from "@/lib/format";
@@ -75,10 +76,11 @@ export default async function PropertyPage() {
                       <Link
                         key={room.id}
                         href={`/rooms/${room.id}`}
-                        className={`card flex flex-col gap-1 p-3 transition active:scale-[0.98] ${
+                        className={`card relative flex flex-col gap-1 p-3 transition active:scale-[0.98] ${
                           occupied ? "" : "bg-surface-2"
                         }`}
                       >
+                        <LinkSpinner className="absolute right-2 top-2" />
                         <div className="flex items-center justify-between">
                           <span className="text-[17px] font-bold tracking-tight">{room.roomNo}</span>
                           {tenant ? <Avatar name={tenant.name} photoUrl={tenant.photoUrl} size={22} /> : null}
