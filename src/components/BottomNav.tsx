@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { IconBuilding, IconHome, IconUsers, IconWrench } from "./icons";
+import { PendingSwap } from "./LinkPending";
 
 const ITEMS = [
   { href: "/", label: "หน้าหลัก", Icon: IconHome, match: (p: string) => p === "/" },
@@ -29,7 +30,9 @@ export function BottomNav() {
                   active ? "bg-accent-soft text-accent-strong" : "text-ink-2"
                 }`}
               >
-                <Icon className="h-[22px] w-[22px]" />
+                <PendingSwap>
+                  <Icon className="h-[22px] w-[22px]" />
+                </PendingSwap>
                 {active ? <span className="truncate">{label}</span> : <span className="sr-only">{label}</span>}
               </Link>
             );

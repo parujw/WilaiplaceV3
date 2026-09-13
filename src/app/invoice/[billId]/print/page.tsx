@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Sarabun } from "next/font/google";
+import { FitToPage } from "./FitToPage";
 import { PrintButton } from "./PrintButton";
 import { BILL_STATUS_LABEL, baht, cycleLabel, thaiDate } from "@/lib/format";
 import { verifyInvoiceToken } from "@/lib/invoice-link";
@@ -47,6 +48,7 @@ export default async function InvoicePrintPage({
 
   return (
     <main className={`${sarabun.className} sheet`}>
+      <FitToPage />
       <PrintButton />
 
       <header className="head">

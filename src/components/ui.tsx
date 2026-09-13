@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { initials } from "@/lib/format";
 import { IconChevron } from "./icons";
+import { PendingDim, PendingSwap } from "./LinkPending";
 
 /* ---------------------------------- รูปคน --------------------------------- */
 
@@ -56,7 +57,13 @@ export function StatCard({
       ) : null}
     </div>
   );
-  return href ? <Link href={href} className="block h-full">{body}</Link> : body;
+  return href ? (
+    <Link href={href} className="block h-full">
+      <PendingDim>{body}</PendingDim>
+    </Link>
+  ) : (
+    body
+  );
 }
 
 /* ------------------------------- หัวข้อส่วน ------------------------------- */
@@ -70,7 +77,9 @@ export function SectionHeader({
       {action && href ? (
         <Link href={href} className="flex items-center gap-0.5 text-[13px] font-medium text-muted">
           {action}
-          <IconChevron className="h-4 w-4" />
+          <PendingSwap>
+            <IconChevron className="h-4 w-4" />
+          </PendingSwap>
         </Link>
       ) : action ? (
         <span className="text-[13px] text-muted">{action}</span>
@@ -129,7 +138,9 @@ export function RowLink({
         {detail ? <div className="mt-0.5 truncate text-[13px] text-muted">{detail}</div> : null}
       </div>
       {right}
-      <IconChevron className="h-4 w-4 shrink-0 text-muted" />
+      <PendingSwap>
+        <IconChevron className="h-4 w-4 shrink-0 text-muted" />
+      </PendingSwap>
     </Link>
   );
 }

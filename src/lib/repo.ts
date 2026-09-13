@@ -1,12 +1,35 @@
 import "server-only";
+import { cache } from "react";
 import { currentCycle, daysOverdue, dueDateFor, previousCycle } from "./billing";
 import { db } from "./db";
+import type { CollectionName } from "./db/store";
 import type {
   AuditLog, Bill, Cycle, Expense, Lease, MaintenanceRequest, MeterReading,
   Payment, Property, PropertySummary, Room, RoomView, SessionUser, Tenant,
 } from "./types";
 
 const byProperty = (propertyId: string) => ({ where: [{ field: "propertyId", op: "==" as const, value: propertyId }] });
+
+/**
+ * อ่าน collection ของอาคารหนึ่ง โดยจำผลไว้ตลอดคำขอนั้น
+ *
+ * หน้าหลักหน้าเดียวเรียกดูบิลถึง 4 รอบ (สรุปยอด กราฟ ความเคลื่อนไหว ยอดค้าง)
+ * ถ้าไม่จำไว้ก็ยิงไป Firestore 4 ครั้งจริงๆ หน้าเลยช้าโดยไม่จำเป็น
+ * cache() ของ React จำเฉพาะภายในคำขอเดียว คำขอถัดไปได้ข้อมูลใหม่เสมอ
+ */
+const listOf = cache(
+  async (collection: CollectionName, propertyId: string): Promise<unknown[]> =>
+    db().list(collection, byProperty(propertyId)),
+);
+
+const roomsOf = (propertyId: string) => listOf("rooms", propertyId) as Promise<Room[]>;
+const tenantsOf = (propertyId: string) => listOf("tenants", propertyId) as Promise<Tenant[]>;
+const leasesOf = (propertyId: string) => listOf("leases", propertyId) as Promise<Lease[]>;
+const billsOf = (propertyId: string) => listOf("bills", propertyId) as Promise<Bill[]>;
+const paymentsOf = (propertyId: string) => listOf("payments", propertyId) as Promise<Payment[]>;
+const readingsOf = (propertyId: string) => listOf("meterReadings", propertyId) as Promise<MeterReading[]>;
+const maintenanceOf = (propertyId: string) =>
+  listOf("maintenance", propertyId) as Promise<MaintenanceRequest[]>;
 
 /* ---------------------------------- อาคาร --------------------------------- */
 
@@ -24,11 +47,11 @@ export const getProperty = (id: string) => db().get<Property>("properties", id);
 
 export async function getRoomViews(propertyId: string): Promise<RoomView[]> {
   const [rooms, leases, tenants, readings, bills] = await Promise.all([
-    db().list<Room>("rooms", byProperty(propertyId)),
-    db().list<Lease>("leases", byProperty(propertyId)),
-    db().list<Tenant>("tenants", byProperty(propertyId)),
-    db().list<MeterReading>("meterReadings", byProperty(propertyId)),
-    db().list<Bill>("bills", byProperty(propertyId)),
+    roomsOf(propertyId),
+    leasesOf(propertyId),
+    tenantsOf(propertyId),
+    readingsOf(propertyId),
+    billsOf(propertyId),
   ]);
 
   const leaseById = new Map(leases.map((l) => [l.id, l]));
@@ -65,9 +88,9 @@ export async function getRoomView(propertyId: string, roomId: string): Promise<R
   return views.find((v) => v.room.id === roomId) ?? null;
 }
 
-export const listTenants = (propertyId: string) => db().list<Tenant>("tenants", byProperty(propertyId));
+export const listTenants = (propertyId: string) => tenantsOf(propertyId);
 export const getTenant = (id: string) => db().get<Tenant>("tenants", id);
-export const listLeases = (propertyId: string) => db().list<Lease>("leases", byProperty(propertyId));
+export const listLeases = (propertyId: string) => leasesOf(propertyId);
 export const getLease = (id: string) => db().get<Lease>("leases", id);
 export const getRoom = (id: string) => db().get<Room>("rooms", id);
 
@@ -84,7 +107,7 @@ export async function listBills(
   propertyId: string,
   filter?: { cycle?: Cycle; status?: Bill["status"]; roomId?: string },
 ): Promise<Bill[]> {
-  let bills = await db().list<Bill>("bills", byProperty(propertyId));
+  let bills = await billsOf(propertyId);
   if (filter?.cycle) bills = bills.filter((b) => b.cycle === filter.cycle);
   if (filter?.status) bills = bills.filter((b) => b.status === filter.status);
   if (filter?.roomId) bills = bills.filter((b) => b.roomId === filter.roomId);
@@ -96,7 +119,7 @@ export async function listBills(
 export const getBill = (id: string) => db().get<Bill>("bills", id);
 
 export async function listPayments(propertyId: string, limit?: number): Promise<Payment[]> {
-  const payments = await db().list<Payment>("payments", byProperty(propertyId));
+  const payments = await paymentsOf(propertyId);
   const sorted = payments.sort(
     (a, b) => b.paidAt.localeCompare(a.paidAt) || b.receiptNo.localeCompare(a.receiptNo),
   );
@@ -110,20 +133,19 @@ export async function paymentsOfBill(billId: string): Promise<Payment[]> {
 export const listExpenses = (propertyId: string) => db().list<Expense>("expenses", byProperty(propertyId));
 
 export async function listMaintenance(propertyId: string): Promise<MaintenanceRequest[]> {
-  const items = await db().list<MaintenanceRequest>("maintenance", byProperty(propertyId));
+  const items = await maintenanceOf(propertyId);
   return items.sort((a, b) => b.reportedAt.localeCompare(a.reportedAt));
 }
 
-export const listMeterReadings = (propertyId: string) =>
-  db().list<MeterReading>("meterReadings", byProperty(propertyId));
+export const listMeterReadings = (propertyId: string) => readingsOf(propertyId);
 
 /* --------------------------------- สรุปผล --------------------------------- */
 
 export async function getSummary(propertyId: string, cycle = currentCycle()): Promise<PropertySummary> {
   const [rooms, bills, maintenance] = await Promise.all([
-    db().list<Room>("rooms", byProperty(propertyId)),
-    db().list<Bill>("bills", byProperty(propertyId)),
-    db().list<MaintenanceRequest>("maintenance", byProperty(propertyId)),
+    roomsOf(propertyId),
+    billsOf(propertyId),
+    maintenanceOf(propertyId),
   ]);
 
   const live = bills.filter((b) => b.status !== "void");
@@ -146,7 +168,7 @@ export async function getSummary(propertyId: string, cycle = currentCycle()): Pr
 
 /** รอบบิลที่มีข้อมูลจริง เรียงใหม่→เก่า ใช้เป็นตัวเลือกในหน้าจอ */
 export async function availableCycles(propertyId: string): Promise<Cycle[]> {
-  const bills = await db().list<Bill>("bills", byProperty(propertyId));
+  const bills = await billsOf(propertyId);
   const cycles = new Set(bills.map((b) => b.cycle));
   cycles.add(currentCycle());
   return [...cycles].sort().reverse();
@@ -157,7 +179,7 @@ export async function collectionByCycle(
   propertyId: string,
   months = 6,
 ): Promise<Array<{ cycle: Cycle; billed: number; collected: number; rate: number }>> {
-  const bills = (await db().list<Bill>("bills", byProperty(propertyId))).filter((b) => b.status !== "void");
+  const bills = (await billsOf(propertyId)).filter((b) => b.status !== "void");
 
   const cycles: Cycle[] = [];
   let c = currentCycle();
@@ -226,9 +248,7 @@ export async function recentActivity(propertyId: string, limit = 12): Promise<Ac
 
 /** ยอดค้างแยกตามอายุหนี้ */
 export async function agingReport(propertyId: string) {
-  const bills = (await db().list<Bill>("bills", byProperty(propertyId))).filter(
-    (b) => b.status !== "void" && b.balance > 0,
-  );
+  const bills = (await billsOf(propertyId)).filter((b) => b.status !== "void" && b.balance > 0);
   const buckets = { current: 0, "1-30": 0, "31-60": 0, "60+": 0 };
   for (const b of bills) {
     const days = daysOverdue(b.dueDate);
