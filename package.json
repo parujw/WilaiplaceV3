@@ -11,9 +11,11 @@
     "migrate:v2": "node --experimental-strip-types scripts/migrate-v2.ts"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^131.0.1",
     "firebase": "^12.19.0",
     "firebase-admin": "^13.6.0",
     "next": "15.5.25",
+    "puppeteer-core": "^23.11.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "server-only": "^0.0.1"

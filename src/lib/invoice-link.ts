@@ -36,6 +36,11 @@ export function invoicePrintPath(billId: string): string {
   return `/invoice/${encodeURIComponent(billId)}/print?t=${invoiceToken(billId)}`;
 }
 
+/** ลิงก์ดาวน์โหลดไฟล์ใบแจ้งหนี้ — ไฟล์จริง ไม่ใช่หน้าเว็บ ใช้ส่งให้ผู้เช่าได้ */
+export function invoiceFilePath(billId: string, format: "png" | "pdf"): string {
+  return `/api/invoice/${encodeURIComponent(billId)}?format=${format}&t=${invoiceToken(billId)}`;
+}
+
 export function verifyInvoiceToken(billId: string, token: string | undefined): boolean {
   if (!token) return false;
   const expected = invoiceToken(billId);

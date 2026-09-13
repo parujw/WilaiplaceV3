@@ -8,7 +8,7 @@ import { IconBack } from "@/components/icons";
 import { Badge, SectionHeader } from "@/components/ui";
 import { BILL_STATUS_LABEL, METHOD_LABEL, baht, cycleLabel, thaiDate } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
-import { invoicePath, invoicePrintPath } from "@/lib/invoice-link";
+import { invoiceFilePath, invoicePath, invoicePrintPath } from "@/lib/invoice-link";
 import { getBill, paymentsOfBill } from "@/lib/repo";
 
 export const dynamic = "force-dynamic";
@@ -116,6 +116,8 @@ export default async function BillPage({ params }: { params: Promise<{ billId: s
           canVoid={canVoid && payments.length === 0}
           invoiceUrl={invoicePath(bill.id)}
           printUrl={invoicePrintPath(bill.id)}
+          imageUrl={invoiceFilePath(bill.id, "png")}
+          pdfUrl={invoiceFilePath(bill.id, "pdf")}
         />
       </section>
 

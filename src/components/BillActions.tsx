@@ -4,8 +4,17 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export function BillActions({
-  billId, balance, canVoid, invoiceUrl, printUrl,
-}: { billId: string; balance: number; canVoid: boolean; invoiceUrl: string; printUrl: string }) {
+  billId, balance, canVoid, invoiceUrl, printUrl, imageUrl, pdfUrl,
+}: {
+  billId: string;
+  balance: number;
+  canVoid: boolean;
+  invoiceUrl: string;
+  printUrl: string;
+  /** ไฟล์รูปที่เซิร์ฟเวอร์วาดให้ — ตัวเดียวกับที่จะส่งเข้าไลน์ */
+  imageUrl: string;
+  pdfUrl: string;
+}) {
   const router = useRouter();
   const [amount, setAmount] = useState(String(balance));
   const [method, setMethod] = useState("transfer");
@@ -101,6 +110,23 @@ export function BillActions({
       >
         พิมพ์ใบแจ้งหนี้ (A4)
       </a>
+
+      {/* ไฟล์ทั้งสองอันเซิร์ฟเวอร์เป็นคนวาด ไม่ใช่เบราว์เซอร์ของเครื่องที่กด
+          จึงได้ใบเดียวกันทุกเครื่อง และเป็นไฟล์ตัวเดียวกับที่จะส่งเข้าไลน์ต่อไป */}
+      <div className="grid grid-cols-2 gap-3">
+        <a
+          href={imageUrl}
+          className="rounded-xl bg-surface py-3.5 text-center text-[14px] font-bold text-ink-2 shadow-[0_1px_2px_rgb(23_23_27/0.06)]"
+        >
+          บันทึกเป็นรูป
+        </a>
+        <a
+          href={pdfUrl}
+          className="rounded-xl bg-surface py-3.5 text-center text-[14px] font-bold text-ink-2 shadow-[0_1px_2px_rgb(23_23_27/0.06)]"
+        >
+          บันทึก PDF
+        </a>
+      </div>
 
       {/* ปุ่ม "เปิดใบแจ้งหนี้" ถูกตัดออก เพราะกดแล้วได้ใบเดียวกับปุ่มพิมพ์ ต่างกันแค่การจัดหน้า
           ลิงก์ใบแจ้งหนี้ยังอยู่ แต่เป็นของไว้ส่งให้ผู้เช่า ไม่ใช่ของไว้เปิดดูเอง */}
