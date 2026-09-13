@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { BillActions } from "@/components/BillActions";
+import { BillEditor } from "@/components/BillEditor";
+import { PaymentDelete } from "@/components/PaymentDelete";
 import { IconBack } from "@/components/icons";
 import { Badge, SectionHeader } from "@/components/ui";
 import { BILL_STATUS_LABEL, METHOD_LABEL, baht, cycleLabel, thaiDate } from "@/lib/format";
@@ -21,6 +23,7 @@ export default async function BillPage({ params }: { params: Promise<{ billId: s
   if (!bill || bill.propertyId !== property.id) notFound();
 
   const payments = await paymentsOfBill(bill.id);
+  const canEdit = user.role !== "viewer";
   const canVoid = (user.role === "owner" || user.role === "manager") && bill.status !== "void";
 
   return (
@@ -91,14 +94,15 @@ export default async function BillPage({ params }: { params: Promise<{ billId: s
           <SectionHeader title="ใบเสร็จที่ออกแล้ว" action={`${payments.length} ใบ`} />
           <div className="card divide-y divide-line overflow-hidden">
             {payments.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <div className="min-w-0">
+              <div key={p.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-semibold">{p.receiptNo}</p>
                   <p className="text-[12px] text-muted">
                     {thaiDate(p.paidAt)} · {METHOD_LABEL[p.method]}
                   </p>
                 </div>
                 <p className="shrink-0 text-[15px] font-bold text-ok">{baht(p.amount)} ฿</p>
+                {canEdit ? <PaymentDelete paymentId={p.id} receiptNo={p.receiptNo} /> : null}
               </div>
             ))}
           </div>
@@ -114,6 +118,12 @@ export default async function BillPage({ params }: { params: Promise<{ billId: s
           printUrl={invoicePrintPath(bill.id)}
         />
       </section>
+
+      {canEdit ? (
+        <section className="px-4 pt-3">
+          <BillEditor bill={bill} canDelete={user.role === "owner" && payments.length === 0} />
+        </section>
+      ) : null}
     </AppShell>
   );
 }

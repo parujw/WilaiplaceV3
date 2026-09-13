@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { IconBack, IconReceipt } from "@/components/icons";
+import { TenantEditor } from "@/components/TenantEditor";
 import { TenantPhotoUpload } from "@/components/TenantPhotoUpload";
 import { Badge, EmptyState, RowLink, SectionHeader } from "@/components/ui";
 import { BILL_STATUS_LABEL, baht, cycleLabel, thaiDate } from "@/lib/format";
@@ -57,6 +58,10 @@ export default async function TenantPage({ params }: { params: Promise<{ tenantI
           )}
           {tenant.note ? <p className="text-center text-[12px] text-muted">{tenant.note}</p> : null}
         </div>
+      </section>
+
+      <section className="px-4 pt-4">
+        <TenantEditor tenant={tenant} />
       </section>
 
       <section className="px-4 pt-6">

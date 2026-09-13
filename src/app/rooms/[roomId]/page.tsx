@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { IconBack, IconGauge, IconReceipt } from "@/components/icons";
+import { RoomManager } from "@/components/RoomManager";
 import { Avatar, Badge, EmptyState, RowLink, SectionHeader } from "@/components/ui";
 import { BILL_STATUS_LABEL, CONDITION_LABEL, baht, cycleLabel, thaiDate } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
-import { getRoomView, listBills } from "@/lib/repo";
+import { getRoomView, listBills, listLeases, listTenants } from "@/lib/repo";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,14 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
 
   const { room, lease, tenant, lastReading, outstanding } = view;
   const bills = await listBills(property.id, { roomId: room.id });
+
+  // คนที่เคยอยู่แต่ตอนนี้ไม่มีสัญญาเดินอยู่ — ให้เลือกได้ตอนกลับมาเช่าใหม่ จะได้ไม่มีรหัสซ้ำสองใบ
+  const [tenants, leases] = await Promise.all([listTenants(property.id), listLeases(property.id)]);
+  const housed = new Set(leases.filter((l) => l.status === "active").map((l) => l.tenantId));
+  const pastTenants = tenants
+    .filter((t) => !housed.has(t.id))
+    .map((t) => ({ id: t.id, name: t.name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "th"));
 
   return (
     <AppShell>
@@ -87,6 +96,17 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
           {lease.note ? <p className="mt-2 px-1 text-[12px] text-muted">หมายเหตุ: {lease.note}</p> : null}
         </section>
       ) : null}
+
+      <section className="px-4 pt-6">
+        <SectionHeader title="จัดการห้องนี้" />
+        <RoomManager
+          room={room}
+          lease={lease}
+          tenant={tenant}
+          pastTenants={pastTenants}
+          defaults={{ rates: property.defaultRates, dueDay: property.paymentDueDay }}
+        />
+      </section>
 
       <section className="px-4 pt-6">
         <SectionHeader title="มิเตอร์ล่าสุด" action={lastReading ? cycleLabel(lastReading.cycle, "full") : undefined} />
