@@ -1,5 +1,4 @@
 import "server-only";
-import chromium from "@sparticuz/chromium";
 import puppeteer, { type Browser } from "puppeteer-core";
 import { env } from "./env";
 import { invoicePrintPath } from "./invoice-link";
@@ -37,16 +36,36 @@ function siteUrl(): string {
   return `http://127.0.0.1:${process.env.PORT ?? 3000}`;
 }
 
+/**
+ * เตรียม Chrome ที่ติดมากับแพ็กเกจให้พร้อมใช้บน serverless
+ *
+ * @sparticuz/chromium จะแตกไฟล์ไลบรารีของ Chrome (libnss3 และเพื่อน) ออกมา
+ * ก็ต่อเมื่อมันเห็นว่าอยู่บน AWS Lambda ซึ่งดูจาก AWS_EXECUTION_ENV
+ * หรือ AWS_LAMBDA_JS_RUNTIME — แต่ Vercel ไม่ได้ตั้งสองตัวนี้ให้
+ *
+ * ผลคือมันแตกแต่ตัว Chrome ไม่แตกไลบรารี ได้ /tmp/chromium ที่เปิดไม่ได้
+ * ฟ้อง "libnss3.so: cannot open shared object file"
+ *
+ * จึงตั้งค่าบอกมันเองว่านี่คือ Lambda รุ่นไหน ต้องตั้งก่อน import
+ * เพราะแพ็กเกจอ่านค่านี้ตั้งแต่ตอนโหลดโมดูล ไม่ใช่ตอนเรียกใช้
+ * (AWS_LAMBDA_JS_RUNTIME เป็นช่องที่แพ็กเกจเปิดไว้ให้ Netlify อยู่แล้ว ไม่ใช่ของแฮ็ก)
+ */
+async function serverlessChromium() {
+  const major = Number(process.versions.node.split(".")[0]);
+  // Node 20 ขึ้นไปใช้ฐาน Amazon Linux 2023 ต่ำกว่านั้นใช้ AL2 — ไลบรารีคนละชุดกัน
+  process.env.AWS_LAMBDA_JS_RUNTIME ??= major >= 20 ? "nodejs20.x" : "nodejs18.x";
+
+  const { default: chromium } = await import("@sparticuz/chromium");
+  return { args: chromium.args, executablePath: await chromium.executablePath() };
+}
+
 /** บน serverless ใช้ Chrome ที่ติดมากับแพ็กเกจ บนเครื่องตัวเองใช้ที่ลงไว้แล้ว */
 async function launch(): Promise<Browser> {
   const serverless = Boolean(env("AWS_LAMBDA_FUNCTION_NAME") ?? env("VERCEL"));
 
   if (serverless) {
-    return puppeteer.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath(),
-      headless: true,
-    });
+    const { args, executablePath } = await serverlessChromium();
+    return puppeteer.launch({ args, executablePath, headless: true });
   }
 
   const local =
