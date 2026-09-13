@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { CollectionChart } from "@/components/CollectionChart";
-import { IconBell, IconBuilding, IconDoor, IconGauge, IconReceipt, IconWallet, IconWrench } from "@/components/icons";
+import { IconBell, IconBuilding, IconChevron, IconDoor, IconGauge, IconReceipt, IconWallet, IconWrench } from "@/components/icons";
 import { Avatar, Badge, EmptyState, RowLink, SectionHeader, StatCard } from "@/components/ui";
 import { baht, compactBaht, cycleLabel, thaiDate } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
@@ -37,10 +37,13 @@ export default async function HomePage() {
         </Link>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[19px] font-bold leading-tight tracking-tight">{user.name}</p>
+          {/* เดิมคำว่า "เปลี่ยน" ขึ้นเฉพาะตอนมีหลายอาคาร พอมีอาคารเดียวเลยดูเหมือนข้อความเฉยๆ
+              ไม่มีใครรู้ว่ากดได้ ทั้งที่เป็นทางเดียวที่จะกลับไปหน้าเลือกอาคาร */}
           <Link href="/select" className="mt-0.5 flex items-center gap-1 text-[13px] text-muted">
-            <IconBuilding className="h-3.5 w-3.5" />
+            <IconBuilding className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{property.name}</span>
-            {properties.length > 1 ? <span className="text-accent">· เปลี่ยน</span> : null}
+            <span className="shrink-0 font-semibold text-accent">· เปลี่ยน</span>
+            <IconChevron className="h-3.5 w-3.5 shrink-0 text-accent" />
           </Link>
         </div>
         <Link

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Avatar, Badge, PropertyImage } from "@/components/ui";
-import { IconChevron, IconDoor, IconPin } from "@/components/icons";
+import { IconBack, IconChevron, IconDoor, IconPin } from "@/components/icons";
 import { getSummary, listProperties } from "@/lib/repo";
-import { getSessionUser } from "@/lib/session";
+import { getSelectedPropertyId, getSessionUser } from "@/lib/session";
 import { AddPropertyForm } from "@/components/AddPropertyForm";
 import { PropertyPicker, SignOutButton } from "./PropertyPicker";
 
@@ -16,10 +16,23 @@ export default async function SelectPropertyPage() {
   const properties = await listProperties(user);
   const summaries = await Promise.all(properties.map((p) => getSummary(p.id)));
 
+  // กลับได้ก็ต่อเมื่อมีอาคารที่เลือกค้างอยู่จริง ไม่งั้นกดกลับแล้วโดนเด้งมาที่นี่อีก
+  const selectedId = await getSelectedPropertyId();
+  const canGoBack = properties.some((p) => p.id === selectedId);
+
   return (
     <div className="app-frame px-4 pb-10 pt-10">
       <header className="flex items-start justify-between gap-3">
         <div>
+          {canGoBack ? (
+            <Link
+              href="/"
+              className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-surface py-2 pl-2 pr-4 text-[13px] font-semibold shadow-[0_1px_2px_rgb(23_23_27/0.06)]"
+            >
+              <IconBack className="h-4 w-4" />
+              กลับหน้าหลัก
+            </Link>
+          ) : null}
           <p className="text-[13px] font-semibold uppercase tracking-[0.16em] text-accent">Wilai Communities</p>
           <h1 className="mt-1.5 text-[26px] font-bold leading-tight tracking-tight">เลือกอาคาร</h1>
           <p className="mt-1 text-[14px] text-muted">สวัสดี {user.name}</p>
