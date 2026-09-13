@@ -19,6 +19,7 @@ export type CollectionName =
   | "utilityCosts"
   | "auditLogs"
   | "allowlist"
+  | "lineLinks"
   | "counters";
 
 export interface WhereClause {

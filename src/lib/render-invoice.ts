@@ -28,7 +28,7 @@ const SCALE = 2;
  * ไม่ใช้ที่อยู่ production เพราะจะกลายเป็นวาดจากโค้ดเวอร์ชันอื่น
  */
 function siteUrl(): string {
-  const explicit = env("NEXT_PUBLIC_SITE_URL") ?? env("SITE_URL");
+  const explicit = env("NEXT_PUBLIC_APP_URL") ?? env("SITE_URL");
   if (explicit) return explicit.replace(/\/$/, "");
 
   const vercel = env("VERCEL_URL");

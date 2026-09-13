@@ -4,12 +4,13 @@ import { AppShell } from "@/components/AppShell";
 import { BillActions } from "@/components/BillActions";
 import { BillEditor } from "@/components/BillEditor";
 import { PaymentDelete } from "@/components/PaymentDelete";
+import { SendToLine } from "@/components/SendToLine";
 import { IconBack } from "@/components/icons";
 import { Badge, SectionHeader } from "@/components/ui";
 import { BILL_STATUS_LABEL, METHOD_LABEL, baht, cycleLabel, thaiDate } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
 import { invoiceFilePath, invoicePath, invoicePrintPath } from "@/lib/invoice-link";
-import { getBill, paymentsOfBill } from "@/lib/repo";
+import { getBill, getTenant, paymentsOfBill } from "@/lib/repo";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,12 @@ export default async function BillPage({ params }: { params: Promise<{ billId: s
   if (!bill || bill.propertyId !== property.id) notFound();
 
   const payments = await paymentsOfBill(bill.id);
+
+  // ส่งเข้าไลน์ได้ต่อเมื่อผู้เช่าผูกบัญชีไว้แล้ว บอกให้ชัดว่าติดตรงไหนถ้ายังส่งไม่ได้
+  const tenant = bill.tenantSnapshot.tenantId ? await getTenant(bill.tenantSnapshot.tenantId) : null;
+  const lineReason = !tenant
+    ? "บิลใบนี้ไม่ได้ผูกกับผู้เช่าในระบบ จึงส่งเข้าไลน์ไม่ได้"
+    : `${tenant.name} ยังไม่ได้ผูกบัญชีไลน์ — เปิดหน้าผู้เช่าแล้วออกรหัสผูกบัญชีก่อน`;
   const canEdit = user.role !== "viewer";
   const canVoid = (user.role === "owner" || user.role === "manager") && bill.status !== "void";
 
@@ -110,6 +117,17 @@ export default async function BillPage({ params }: { params: Promise<{ billId: s
       ) : null}
 
       <section className="px-4 pt-6">
+        {bill.status === "void" ? null : (
+          <div className="mb-3">
+            <SendToLine
+              billId={bill.id}
+              sentAt={bill.sentToLineAt}
+              canSend={Boolean(tenant?.lineUserId)}
+              reason={lineReason}
+            />
+          </div>
+        )}
+
         <BillActions
           billId={bill.id}
           balance={bill.status === "void" ? 0 : bill.balance}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { IconBack, IconReceipt } from "@/components/icons";
+import { LineLinkCard } from "@/components/LineLinkCard";
 import { TenantEditor } from "@/components/TenantEditor";
 import { TenantPhotoUpload } from "@/components/TenantPhotoUpload";
 import { Badge, EmptyState, RowLink, SectionHeader } from "@/components/ui";
@@ -61,6 +62,14 @@ export default async function TenantPage({ params }: { params: Promise<{ tenantI
       </section>
 
       <section className="px-4 pt-4">
+        <LineLinkCard
+          tenantId={tenant.id}
+          tenantName={tenant.nickname || tenant.name}
+          linked={Boolean(tenant.lineUserId)}
+        />
+      </section>
+
+      <section className="px-4 pt-3">
         <TenantEditor tenant={tenant} />
       </section>
 
