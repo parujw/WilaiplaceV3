@@ -19,21 +19,39 @@
   --link: #0000ee;
 }
 
+/*
+ * ขอบกระดาษยกให้ @page คุม ไม่ใช่ padding ของแผ่น
+ *
+ * เดิมตั้ง margin: 0 แล้วเว้นขอบเองด้วย padding 40pt ซึ่งได้ผลบนเดสก์ท็อป
+ * แต่ Safari บน iPhone ไม่สน margin: 0 มันใส่ขอบของตัวเองทับลงไปอีกชั้น
+ * กลายเป็นขอบบนเกือบ 26 มม. เนื้อที่หายไปจนใบทะลุไปหน้าสองทุกใบ
+ * ตั้ง @page margin ไว้ใกล้กับที่เครื่องพิมพ์ใส่เองอยู่แล้ว ทั้งสองฝั่งจึงได้หน้าตาเดียวกัน
+ */
 @page {
   size: A4;
-  margin: 0;
+  margin: 12mm 14mm;
 }
 
 .sheet {
   box-sizing: border-box;
   width: 210mm;
-  min-height: 297mm;
   margin: 0 auto;
   padding: 40pt 56pt;
   background: #fff;
   color: var(--ink);
   font-size: 9.6pt;
   line-height: 1.45;
+}
+
+/* ตารางที่ห่อทั้งใบไว้ให้หัวกระดาษซ้ำทุกหน้า — ตัวมันเองต้องไม่มีผลกับหน้าตา */
+.doc {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.doc > thead > tr > td,
+.doc > tbody > tr > td {
+  padding: 0;
 }
 
 /* ---------------------------------- หัวใบ --------------------------------- */
@@ -313,9 +331,23 @@
   position: fixed;
   top: 12pt;
   right: 12pt;
+  left: 12pt;
   display: flex;
+  justify-content: space-between;
   gap: 8pt;
   z-index: 10;
+}
+
+.print-bar .back {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999pt;
+  background: #fff;
+  padding: 9pt 18pt;
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4pt 14pt -6pt rgb(0 0 0 / 0.5);
 }
 
 .print-bar button {
@@ -339,15 +371,70 @@
   .sheet {
     box-shadow: 0 10px 40px -12px rgb(0 0 0 / 0.35);
   }
+
+  /*
+   * บนจอที่แคบกว่ากระดาษ ให้แผ่นหดตามจอแทนที่จะล้นออกไป
+   * บนมือถือเดิมต้องเลื่อนซ้ายขวาถึงจะเห็นคอลัมน์จำนวนเงิน ยิ่งเปิดเป็น PWA ยิ่งงง
+   * ที่นี่เป็นแค่หน้าตัวอย่าง กดพิมพ์เมื่อไหร่ค่อยกลับไปใช้ความกว้างกระดาษจริงตาม @page
+   */
+  .sheet {
+    width: min(210mm, 100%);
+  }
+
+  @media (max-width: 30rem) {
+    /* แถบปุ่มลอยอยู่ จอแคบๆ มันทับชื่ออาคารพอดี เว้นที่ให้พ้นก่อน */
+    body {
+      padding-top: 64pt;
+    }
+
+    .sheet {
+      padding: 20pt 16pt;
+      font-size: 11pt;
+    }
+
+    /* การ์ดสองใบเรียงข้างกันบนกระดาษ แต่บนมือถือซ้อนกันอ่านง่ายกว่า */
+    .cards {
+      flex-direction: column;
+    }
+
+    .head {
+      flex-direction: column;
+      gap: 10pt;
+    }
+
+    .head-right {
+      text-align: left;
+    }
+
+    .meta > div {
+      justify-content: flex-start;
+    }
+
+    .pay {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
 }
 
 @media print {
   .print-bar { display: none; }
 
-  /* ย่อทั้งแผ่นให้พอดีหน้าเดียว ค่ามาจาก FitToPage ที่วัดความสูงจริงตอนจะพิมพ์
-     ใช้ zoom เพราะมีผลกับการตัดหน้า ต่างจาก transform ที่ไม่มีผล */
+  /* ขอบกระดาษมาจาก @page แล้ว แผ่นจึงไม่ต้องเว้นเองซ้ำอีก */
   .sheet {
-    zoom: var(--print-zoom, 1);
+    width: auto;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  /* หัวกระดาษซ้ำทุกหน้า — ต้องบอกเบราว์เซอร์ตรงๆ ว่านี่คือหัวตาราง
+     ไม่ใช่แค่แถวแรก ไม่งั้นบางตัวจะพิมพ์ครั้งเดียวแล้วจบ */
+  .doc > thead {
+    display: table-header-group;
+  }
+
+  .doc > tbody {
+    display: table-row-group;
   }
 
   /* บิลที่มีรายการเยอะจนล้นหน้า ให้ตัดหน้าที่ขอบบล็อก ไม่ใช่กลางบล็อก */
@@ -358,12 +445,6 @@
   .foot,
   .items tr {
     break-inside: avoid;
-  }
-
-  .sheet {
-    width: auto;
-    min-height: 0;
-    box-shadow: none;
   }
 
   /* ไม่ให้เบราว์เซอร์ตัดพื้นหลังสีออกตอนพิมพ์ */

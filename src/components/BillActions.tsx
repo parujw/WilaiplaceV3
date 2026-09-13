@@ -102,21 +102,24 @@ export function BillActions({
         พิมพ์ใบแจ้งหนี้ (A4)
       </a>
 
-      <div className="grid grid-cols-2 gap-3">
-        <a
-          href={invoiceUrl} target="_blank" rel="noreferrer"
-          className="rounded-xl bg-surface py-3.5 text-center text-[14px] font-bold text-ink-2 shadow-[0_1px_2px_rgb(23_23_27/0.06)]"
-        >
-          เปิดใบแจ้งหนี้
-        </a>
-        <button
-          type="button"
-          onClick={() => navigator.clipboard?.writeText(new URL(invoiceUrl, window.location.origin).toString())}
-          className="rounded-xl bg-surface py-3.5 text-[14px] font-bold text-ink-2 shadow-[0_1px_2px_rgb(23_23_27/0.06)]"
-        >
-          คัดลอกลิงก์
-        </button>
-      </div>
+      {/* ปุ่ม "เปิดใบแจ้งหนี้" ถูกตัดออก เพราะกดแล้วได้ใบเดียวกับปุ่มพิมพ์ ต่างกันแค่การจัดหน้า
+          ลิงก์ใบแจ้งหนี้ยังอยู่ แต่เป็นของไว้ส่งให้ผู้เช่า ไม่ใช่ของไว้เปิดดูเอง */}
+      <button
+        type="button"
+        onClick={async () => {
+          const url = new URL(invoiceUrl, window.location.origin).toString();
+          try {
+            await navigator.clipboard.writeText(url);
+            setDone("คัดลอกลิงก์แล้ว ส่งให้ผู้เช่าทาง LINE ได้เลย");
+          } catch {
+            // บางเบราว์เซอร์ห้ามคัดลอกถ้าไม่ได้เปิดผ่าน https — โชว์ลิงก์ให้กดค้างคัดลอกเองแทน
+            setError(`คัดลอกอัตโนมัติไม่ได้ ลิงก์คือ ${url}`);
+          }
+        }}
+        className="w-full rounded-xl bg-surface py-3.5 text-[14px] font-bold text-ink-2 shadow-[0_1px_2px_rgb(23_23_27/0.06)]"
+      >
+        คัดลอกลิงก์ใบแจ้งหนี้
+      </button>
 
       {canVoid ? (
         voiding ? (
