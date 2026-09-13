@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requestOrigin } from "@/lib/api";
 import { verifyInvoiceToken } from "@/lib/invoice-link";
 import { renderInvoice, type InvoiceFormat } from "@/lib/render-invoice";
 import { getBill } from "@/lib/repo";
@@ -34,7 +35,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ bill
   if (!bill || bill.status === "void") return new NextResponse("ไม่พบใบแจ้งหนี้", { status: 404 });
 
   try {
-    const file = await renderInvoice(id, format);
+    const file = await renderInvoice(id, format, requestOrigin(request));
     return new NextResponse(new Uint8Array(file), {
       headers: {
         "Content-Type": TYPES[format],

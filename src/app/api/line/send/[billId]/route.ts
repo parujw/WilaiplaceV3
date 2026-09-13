@@ -1,4 +1,4 @@
-import { ApiError, handle, requireEditor, requireSameProperty } from "@/lib/api";
+import { ApiError, handle, requestOrigin, requireEditor, requireSameProperty } from "@/lib/api";
 import { db } from "@/lib/db";
 import { baht, cycleLabel, thaiDate } from "@/lib/format";
 import { isLineConfigured, missingLineEnv, push, text } from "@/lib/line";
@@ -19,7 +19,7 @@ export const runtime = "nodejs";
  *
  * วาดรูปจากหน้าพิมพ์ตัวเดิม ใบที่ผู้เช่าได้จึงเหมือนใบที่เจ้าของพิมพ์ทุกจุด
  */
-export async function POST(_request: Request, { params }: { params: Promise<{ billId: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ billId: string }> }) {
   return handle(async () => {
     const { propertyId, user } = await requireEditor("ส่งบิลเข้าไลน์");
 
@@ -45,7 +45,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ bi
 
     const property = await getProperty(propertyId);
 
-    const image = await renderInvoice(bill.id, "png");
+    const image = await renderInvoice(bill.id, "png", requestOrigin(request));
     // ใส่เวลาไว้ในชื่อไฟล์ แก้บิลแล้วส่งใหม่จะได้ไม่โดนแคชของ LINE ทับ
     const url = await uploadPublic(
       `invoices/${bill.id}-${Date.now()}.png`,

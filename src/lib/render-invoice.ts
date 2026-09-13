@@ -26,7 +26,10 @@ const SCALE = 2;
  * บน Vercel ใช้ VERCEL_URL ซึ่งชี้มาที่ deployment ปัจจุบันเสมอ
  * ไม่ใช้ที่อยู่ production เพราะจะกลายเป็นวาดจากโค้ดเวอร์ชันอื่น
  */
-function siteUrl(): string {
+function siteUrl(origin?: string): string {
+  // ที่อยู่ที่ผู้เรียกส่งมาเชื่อถือได้ที่สุด เพราะมาจาก request จริงที่วิ่งเข้ามา
+  if (origin) return origin.replace(/\/$/, "");
+
   const explicit = env("NEXT_PUBLIC_APP_URL") ?? env("SITE_URL");
   if (explicit) return explicit.replace(/\/$/, "");
 
@@ -82,16 +85,19 @@ async function launch(): Promise<Browser> {
 
 export type InvoiceFormat = "png" | "pdf";
 
-export async function renderInvoice(billId: string, format: InvoiceFormat): Promise<Buffer> {
+export async function renderInvoice(
+  billId: string,
+  format: InvoiceFormat,
+  /** ที่อยู่ของเซิร์ฟเวอร์ตัวเอง ส่งมาจาก request ที่วิ่งเข้ามา (ดู requestOrigin) */
+  origin?: string,
+): Promise<Buffer> {
   const browser = await launch();
+  const url = `${siteUrl(origin)}${invoicePrintPath(billId)}`;
 
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: SHEET_WIDTH_PX, height: 1200, deviceScaleFactor: SCALE });
-    await page.goto(`${siteUrl()}${invoicePrintPath(billId)}`, {
-      waitUntil: "networkidle0",
-      timeout: 30_000,
-    });
+    const response = await page.goto(url, { waitUntil: "networkidle0", timeout: 30_000 });
 
     // ฟอนต์ไทยกับรูป QR ต้องมาครบก่อน ไม่งั้นได้รูปที่ตัวอักษรยังไม่เปลี่ยนฟอนต์
     await page.evaluate(() => document.fonts.ready);
@@ -105,7 +111,15 @@ export async function renderInvoice(billId: string, format: InvoiceFormat): Prom
     // ถ่ายเฉพาะตัวแผ่น ไม่เอาพื้นหลังสีเทาของหน้าจอตัวอย่างติดมาด้วย
     await page.addStyleTag({ content: ".print-bar { display: none !important; }" });
     const sheet = await page.$(".sheet");
-    if (!sheet) throw new Error("ไม่พบใบแจ้งหนี้ในหน้าที่เปิดขึ้นมา");
+    if (!sheet) {
+      // บอกให้ครบว่าเปิดที่ไหน ได้อะไรกลับมา ไม่งั้นไล่หาสาเหตุไม่ได้เลย
+      const status = response?.status() ?? 0;
+      throw new Error(
+        `เปิด ${url} แล้วไม่เจอใบแจ้งหนี้ (HTTP ${status} · "${await page.title()}") ` +
+          "— ถ้าเป็น 404 แปลว่าเปิดผิดโดเมน ให้ลบ NEXT_PUBLIC_APP_URL ทิ้ง " +
+          "ถ้าเป็นหน้าให้ล็อกอิน แปลว่า Deployment Protection ของ Vercel กั้นอยู่",
+      );
+    }
 
     return Buffer.from(await sheet.screenshot({ type: "png" }));
   } finally {

@@ -62,6 +62,24 @@ export function before(doc: object, patch: Record<string, unknown>): Record<stri
   return Object.fromEntries(Object.keys(patch).map((key) => [key, source[key]]));
 }
 
+/**
+ * ที่อยู่จริงของเซิร์ฟเวอร์ตัวเอง เอาจาก request ที่วิ่งเข้ามา
+ *
+ * ใช้ตอนที่เซิร์ฟเวอร์ต้องเปิดหน้าเว็บของตัวเอง (วาดใบแจ้งหนี้ด้วย Chrome)
+ * เดิมเดาจาก environment variable ซึ่งพลาดง่ายมาก ตั้งผิดโดเมนทีเดียว
+ * มันจะไปเปิดเว็บคนอื่นแล้วรายงานว่า "ไม่พบใบแจ้งหนี้" ซึ่งชี้ไม่ถูกจุดเลย
+ * request ที่วิ่งเข้ามารู้ที่อยู่ที่ถูกต้องอยู่แล้ว ไม่ต้องให้ใครมาตั้งค่า
+ */
+export function requestOrigin(request: Request): string {
+  const headers = request.headers;
+  // Vercel วางตัวจริงไว้ใน x-forwarded-* ส่วน host ธรรมดาเป็นของ proxy ชั้นใน
+  const host = headers.get("x-forwarded-host") ?? headers.get("host");
+  if (!host) return new URL(request.url).origin;
+
+  const proto = headers.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
 export async function readJson<T>(request: Request): Promise<T> {
   try {
     return (await request.json()) as T;
