@@ -21,10 +21,24 @@ const apiKey = () => env("NEXT_PUBLIC_FIREBASE_API_KEY") ?? env("FIREBASE_API_KE
 
 export const projectId = () => env("FIREBASE_PROJECT_ID") ?? env("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
 
-export const storageBucket = () =>
-  env("FIREBASE_STORAGE_BUCKET") ??
-  env("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET") ??
-  (projectId() ? `${projectId()}.firebasestorage.app` : undefined);
+export const storageBucket = () => bucketCandidates()[0];
+
+/**
+ * ชื่อ bucket ที่เป็นไปได้ เรียงจากน่าจะใช่ที่สุด
+ *
+ * Firebase เปลี่ยนรูปแบบชื่อกลางทาง โปรเจกต์ที่สร้างใหม่ได้ .firebasestorage.app
+ * ส่วนของเก่าเป็น .appspot.com เดาผิดทีเดียวจะได้ "The specified bucket does not exist"
+ * ซึ่งอ่านแล้วนึกว่ายังไม่ได้เปิด Storage ทั้งที่เปิดแล้วแต่ชื่อคนละแบบ
+ * ตั้ง FIREBASE_STORAGE_BUCKET เองเมื่อไหร่ ใช้ค่านั้นอย่างเดียว ไม่ต้องเดา
+ */
+export function bucketCandidates(): string[] {
+  const explicit = env("FIREBASE_STORAGE_BUCKET") ?? env("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET");
+  if (explicit) return [explicit];
+
+  const project = projectId();
+  if (!project) return [];
+  return [`${project}.firebasestorage.app`, `${project}.appspot.com`];
+}
 
 /** null = ตั้งค่าไม่ครบ ล็อกอิน Google ไม่ได้ */
 export function webConfig(): FirebaseWebConfig | null {

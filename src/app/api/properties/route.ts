@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { getStorage } from "firebase-admin/storage";
 import { db } from "@/lib/db";
-import { adminApp, isFirebaseConfigured } from "@/lib/firebase-admin";
-import { storageBucket } from "@/lib/firebase-config";
+import { canUploadPublic, uploadPublic } from "@/lib/storage";
 import { audit, getProperty } from "@/lib/repo";
 import { getSessionUser } from "@/lib/session";
 import type { PaymentInfo, Property } from "@/lib/types";
@@ -17,13 +15,12 @@ async function storePhoto(propertyId: string, dataUrl: string): Promise<string> 
   const bytes = Buffer.from(base64, "base64");
   if (bytes.byteLength > MAX_BYTES) throw new Error("ไฟล์ใหญ่เกินไป");
 
-  const bucketName = storageBucket();
-  if (!isFirebaseConfigured() || !bucketName) return dataUrl;
+  // โหมดสาธิตไม่มี Storage — เก็บรูปไว้ในข้อมูลเลย
+  if (!canUploadPublic()) return dataUrl;
 
-  const file = getStorage(adminApp()).bucket(bucketName).file(`properties/${propertyId}.${contentType.split("/")[1]}`);
-  await file.save(bytes, { contentType, resumable: false, metadata: { cacheControl: "public, max-age=86400" } });
-  await file.makePublic();
-  return `https://storage.googleapis.com/${bucketName}/${file.name}?v=${Date.now()}`;
+  const url = await uploadPublic(`properties/${propertyId}.${contentType.split("/")[1]}`, bytes, contentType);
+  // ต่อท้ายด้วยเวลา ไม่งั้นเปลี่ยนรูปแล้วเบราว์เซอร์ยังโชว์รูปเก่าที่แคชไว้
+  return `${url}?v=${Date.now()}`;
 }
 
 /** สร้างอาคารใหม่ในเครือ — เฉพาะเจ้าของ */

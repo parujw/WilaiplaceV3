@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { getStorage } from "firebase-admin/storage";
 import { db } from "@/lib/db";
-import { adminApp, isFirebaseConfigured } from "@/lib/firebase-admin";
-import { storageBucket } from "@/lib/firebase-config";
 import { audit } from "@/lib/repo";
+import { canUploadPublic, uploadPublic } from "@/lib/storage";
 import { getSessionUser } from "@/lib/session";
 import type { Tenant } from "@/lib/types";
 
@@ -31,19 +29,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     return NextResponse.json({ error: "ไฟล์ใหญ่เกินไป ลองถ่ายใหม่หรือเลือกรูปที่เล็กลง" }, { status: 413 });
   }
 
-  let photoUrl: string;
-  const bucketName = storageBucket();
-
-  if (isFirebaseConfigured() && bucketName) {
-    const ext = contentType.split("/")[1];
-    const file = getStorage(adminApp()).bucket(bucketName).file(`tenants/${tenantId}.${ext}`);
-    await file.save(bytes, { contentType, resumable: false, metadata: { cacheControl: "public, max-age=86400" } });
-    await file.makePublic();
-    photoUrl = `https://storage.googleapis.com/${bucketName}/${file.name}?v=${Date.now()}`;
-  } else {
-    // โหมดสาธิต — เก็บรูปไว้ในข้อมูลเลย ไม่ต้องมี Storage
-    photoUrl = dataUrl;
-  }
+  // โหมดสาธิตไม่มี Storage — เก็บรูปไว้ในข้อมูลเลย
+  const photoUrl = canUploadPublic()
+    ? `${await uploadPublic(`tenants/${tenantId}.${contentType.split("/")[1]}`, bytes, contentType)}?v=${Date.now()}`
+    : dataUrl;
 
   await db().update("tenants", tenantId, { photoUrl });
   await audit(user, {
