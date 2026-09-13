@@ -5,7 +5,8 @@ import { IconBell, IconBuilding, IconChevron, IconDoor, IconGauge, IconReceipt, 
 import { Avatar, Badge, EmptyState, RowLink, SectionHeader, StatCard } from "@/components/ui";
 import { baht, compactBaht, cycleLabel, thaiDate } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
-import { agingReport, collectionByCycle, currentCycle, getSummary, recentActivity } from "@/lib/repo";
+import { agingReport, collectionByCycle, currentCycle, getAlerts, getSummary, recentActivity } from "@/lib/repo";
+import { badgeCount } from "@/lib/alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +21,15 @@ export default async function HomePage() {
   const { user, property, properties } = await requireContext();
   const cycle = currentCycle();
 
-  const [summary, chart, activity, aging] = await Promise.all([
+  const [summary, chart, activity, aging, alerts] = await Promise.all([
     getSummary(property.id, cycle),
     collectionByCycle(property.id, 6),
     recentActivity(property.id, 6),
     agingReport(property.id),
+    getAlerts(property.id),
   ]);
+
+  const urgent = badgeCount(alerts);
 
   const overdue = aging.buckets["1-30"] + aging.buckets["31-60"] + aging.buckets["60+"];
 
@@ -46,14 +50,19 @@ export default async function HomePage() {
             <IconChevron className="h-3.5 w-3.5 shrink-0 text-accent" />
           </Link>
         </div>
+        {/* กระดิ่งเดิมพาไปหน้าแจ้งซ่อมอย่างเดียว ทั้งที่เรื่องที่ต้องรู้มีมากกว่านั้น
+            ตอนนี้รวมทุกเรื่องที่ต้องทำอะไรสักอย่างไว้ที่ /alerts
+            ตัวเลขนับเฉพาะเรื่องที่ต้องรีบ ไม่งั้นจะบวมจนไม่มีความหมาย */}
         <Link
-          href="/maintenance"
-          aria-label="แจ้งซ่อม"
-          className="relative grid h-11 w-11 place-items-center rounded-full bg-surface shadow-[0_1px_2px_rgb(23_23_27/0.06)]"
+          href="/alerts"
+          aria-label={urgent > 0 ? `ที่ต้องจัดการ ${urgent} เรื่อง` : "ที่ต้องจัดการ"}
+          className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full bg-surface shadow-[0_1px_2px_rgb(23_23_27/0.06)]"
         >
           <IconBell />
-          {summary.openMaintenance > 0 ? (
-            <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-accent ring-2 ring-white" />
+          {urgent > 0 ? (
+            <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-bold leading-none text-white ring-2 ring-bg">
+              {urgent > 9 ? "9+" : urgent}
+            </span>
           ) : null}
         </Link>
       </header>

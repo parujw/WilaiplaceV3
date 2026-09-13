@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { IconBuilding, IconHome, IconUsers, IconWrench } from "./icons";
+import { IconBuilding, IconChart, IconHome, IconUsers } from "./icons";
 import { PendingSwap } from "./LinkPending";
 
 const ITEMS = [
   { href: "/", label: "หน้าหลัก", Icon: IconHome, match: (p: string) => p === "/" },
   { href: "/property", label: "อาคาร", Icon: IconBuilding, match: (p: string) => p.startsWith("/property") || p.startsWith("/rooms") },
   { href: "/tenants", label: "ผู้เช่า", Icon: IconUsers, match: (p: string) => p.startsWith("/tenants") },
-  { href: "/maintenance", label: "แจ้งซ่อม", Icon: IconWrench, match: (p: string) => p.startsWith("/maintenance") },
+  // แจ้งซ่อมย้ายไปอยู่ทางลัดในหน้าหลักกับกระดิ่งแจ้งเตือน เพราะนานๆ ใช้ที
+  { href: "/insights", label: "วิเคราะห์", Icon: IconChart, match: (p: string) => p.startsWith("/insights") },
 ];
 
 export function BottomNav() {

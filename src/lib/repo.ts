@@ -1,6 +1,10 @@
 import "server-only";
 import { cache } from "react";
+import { buildAlerts, type Alert } from "./alerts";
 import { currentCycle, daysOverdue, dueDateFor, previousCycle } from "./billing";
+import {
+  actualsByCycle, collectionRate, expirySchedule, recurringMonthly, rentBand, vacancyLoss,
+} from "./forecast";
 import { db } from "./db";
 import type { CollectionName } from "./db/store";
 import type {
@@ -286,6 +290,48 @@ export async function nextReceiptNo(cycle: Cycle): Promise<string> {
 }
 
 export { currentCycle, dueDateFor };
+
+/* ------------------------------ แจ้งเตือน / วิเคราะห์ ----------------------------- */
+
+/**
+ * เรื่องที่ต้องรู้ทั้งหมดในที่เดียว
+ * อ่านทุก collection ที่เกี่ยวข้องพร้อมกัน และทุกตัวผ่าน cache() อยู่แล้ว
+ * หน้าหลักเรียกอันนี้เพื่อเอาจำนวนขึ้นกระดิ่ง หน้าแจ้งเตือนเรียกเพื่อเอารายการเต็ม
+ * เรียกสองที่ในคำขอเดียวกันก็ยิงฐานข้อมูลชุดเดียว
+ */
+export async function getAlerts(propertyId: string): Promise<Alert[]> {
+  const [bills, views, leases, tenants, maintenance, issues] = await Promise.all([
+    billsOf(propertyId),
+    getRoomViews(propertyId),
+    leasesOf(propertyId),
+    tenantsOf(propertyId),
+    maintenanceOf(propertyId),
+    migrationIssues(),
+  ]);
+  return buildAlerts({ bills, views, leases, tenants, maintenance, migrationIssues: issues });
+}
+
+/** ตัวเลขบริหารทั้งชุดสำหรับหน้าวิเคราะห์ */
+export async function getInsights(propertyId: string) {
+  const [rooms, leases, bills] = await Promise.all([
+    roomsOf(propertyId),
+    leasesOf(propertyId),
+    billsOf(propertyId),
+  ]);
+
+  return {
+    rooms: rooms.length,
+    occupied: rooms.filter((r) => r.activeLeaseId).length,
+    recurring: recurringMonthly(leases),
+    vacancy: vacancyLoss(rooms),
+    collection: collectionRate(bills),
+    band: rentBand(leases, rooms.length),
+    expiry: expirySchedule(leases),
+    actuals: actualsByCycle(bills),
+  };
+}
+
+export type Insights = Awaited<ReturnType<typeof getInsights>>;
 
 /** ปัญหาข้อมูลที่ตัวแปลง V2 บันทึกไว้ตอนย้าย — โชว์ในหน้าตั้งค่าเพื่อให้ตามแก้ */
 export async function migrationIssues(): Promise<string[]> {

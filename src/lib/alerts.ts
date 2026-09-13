@@ -1,0 +1,160 @@
+/**
+ * เรื่องที่เจ้าของต้องรู้ — รวมไว้ที่กระดิ่งมุมขวาบน คำนวณล้วน ไม่แตะฐานข้อมูล
+ *
+ * เดิมข้อมูลพวกนี้กระจายอยู่คนละหน้า ต้องเดินดูเองทีละหน้าถึงจะรู้ว่ามีอะไรค้าง
+ * บิลเกินกำหนดอยู่หน้าบิล ห้องว่างอยู่หน้าอาคาร งานซ่อมอยู่อีกหน้า
+ * ถ้าไม่ได้เปิดหน้านั้นก็ไม่รู้ ที่นี่จึงรวมทุกเรื่องที่ต้อง "ทำอะไรสักอย่าง" ไว้ที่เดียว
+ *
+ * เกณฑ์คัดเข้า: ต้องมีสิ่งที่ทำได้ตอนนี้ ไม่ใช่แค่ข้อมูลน่าสนใจ
+ * "ห้อง 301 ค้าง 4,700 บาทมา 35 วัน" เข้า — ไปทวงได้
+ * "อัตราเข้าอยู่ 82%" ไม่เข้า — เป็นตัวเลขให้ดู อยู่หน้าวิเคราะห์
+ */
+
+import { currentCycle, daysOverdue } from "./billing";
+import { thaiDate } from "./format";
+import type { Bill, Cycle, Lease, MaintenanceRequest, RoomView, Tenant } from "./types";
+
+export type AlertLevel = "danger" | "warn" | "info";
+
+export interface Alert {
+  id: string;
+  level: AlertLevel;
+  title: string;
+  detail: string;
+  href: string;
+  /** ตัวเลขประกอบ เช่น จำนวนเงินหรือจำนวนรายการ */
+  amount?: number;
+}
+
+/** เรียงตามความเร่งด่วน เรื่องที่ต้องทำก่อนอยู่บนสุด */
+const LEVEL_ORDER: Record<AlertLevel, number> = { danger: 0, warn: 1, info: 2 };
+
+export interface AlertInput {
+  bills: Bill[];
+  views: RoomView[];
+  leases: Lease[];
+  tenants: Tenant[];
+  maintenance: MaintenanceRequest[];
+  cycle?: Cycle;
+  today?: Date;
+  /** ปัญหาข้อมูลที่ตัวแปลง V2 บันทึกไว้ตอนย้าย */
+  migrationIssues?: string[];
+}
+
+/** สัญญาที่จะหมดอายุภายในกี่วันถึงถือว่าต้องเริ่มคุยเรื่องต่อสัญญา */
+const EXPIRY_WARNING_DAYS = 60;
+
+export function buildAlerts(input: AlertInput): Alert[] {
+  const today = input.today ?? new Date();
+  const cycle = input.cycle ?? currentCycle(today);
+  const alerts: Alert[] = [];
+
+  /* --- บิลเกินกำหนด: เรียงจากค้างนานสุด --- */
+  const overdue = input.bills
+    .filter((b) => b.status !== "void" && b.balance > 0 && daysOverdue(b.dueDate, today) > 0)
+    .sort((a, b) => daysOverdue(b.dueDate, today) - daysOverdue(a.dueDate, today));
+
+  for (const bill of overdue) {
+    const days = daysOverdue(bill.dueDate, today);
+    alerts.push({
+      id: `overdue-${bill.id}`,
+      level: days > 30 ? "danger" : "warn",
+      title: `ห้อง ${bill.roomNo} ค้างชำระ ${bill.balance.toLocaleString("th-TH")} บาท`,
+      detail: `เกินกำหนดมา ${days} วัน · ${bill.tenantSnapshot.name}`,
+      href: `/bills/${encodeURIComponent(bill.id)}`,
+      amount: bill.balance,
+    });
+  }
+
+  /* --- ห้องที่มีคนอยู่แต่ยังไม่ได้ออกบิลรอบนี้ --- */
+  const billedRooms = new Set(input.bills.filter((b) => b.cycle === cycle && b.status !== "void").map((b) => b.roomId));
+  const unbilled = input.views.filter((v) => v.lease && !billedRooms.has(v.room.id));
+  if (unbilled.length > 0) {
+    alerts.push({
+      id: `unbilled-${cycle}`,
+      level: "warn",
+      title: `ยังไม่ได้ออกบิล ${unbilled.length} ห้อง`,
+      detail: `ห้อง ${unbilled.map((v) => v.room.roomNo).join(", ")}`,
+      href: "/meter",
+      amount: unbilled.length,
+    });
+  }
+
+  /* --- งานซ่อมที่ยังไม่ปิด --- */
+  for (const ticket of input.maintenance.filter((m) => m.status === "open" || m.status === "in_progress")) {
+    alerts.push({
+      id: `maintenance-${ticket.id}`,
+      level: ticket.urgency === "urgent" ? "danger" : "info",
+      title: `แจ้งซ่อมห้อง ${ticket.roomNo}${ticket.urgency === "urgent" ? " (ด่วน)" : ""}`,
+      detail: `${ticket.problem} · แจ้งเมื่อ ${thaiDate(ticket.reportedAt)}`,
+      href: "/maintenance",
+    });
+  }
+
+  /* --- สัญญาที่กำลังจะหมดอายุ --- */
+  const roomByLease = new Map(input.views.filter((v) => v.lease).map((v) => [v.lease!.id, v.room]));
+  const limit = new Date(today);
+  limit.setDate(limit.getDate() + EXPIRY_WARNING_DAYS);
+  const limitIso = limit.toISOString().slice(0, 10);
+  const todayIso = today.toISOString().slice(0, 10);
+
+  for (const lease of input.leases) {
+    if (lease.status !== "active" || !lease.endDate) continue;
+    if (lease.endDate > limitIso) continue;
+    const room = roomByLease.get(lease.id);
+    alerts.push({
+      id: `expiry-${lease.id}`,
+      level: lease.endDate < todayIso ? "warn" : "info",
+      title: `สัญญาห้อง ${room?.roomNo ?? "—"} ${lease.endDate < todayIso ? "หมดอายุแล้ว" : "ใกล้หมดอายุ"}`,
+      detail: `สิ้นสุด ${thaiDate(lease.endDate)} · ค่าเช่า ${lease.rent.toLocaleString("th-TH")} บาท/เดือน`,
+      href: room ? `/rooms/${room.id}` : "/property",
+    });
+  }
+
+  /* --- ห้องว่าง: รวมเป็นรายการเดียว ไม่แยกทีละห้องให้รก --- */
+  const vacant = input.views.filter((v) => !v.lease);
+  if (vacant.length > 0) {
+    const monthly = vacant.reduce((sum, v) => sum + v.room.baseRent, 0);
+    alerts.push({
+      id: "vacant",
+      level: "info",
+      title: `ห้องว่าง ${vacant.length} ห้อง`,
+      detail: `เสียโอกาสรายได้ ${monthly.toLocaleString("th-TH")} บาท/เดือน · ห้อง ${vacant.map((v) => v.room.roomNo).join(", ")}`,
+      href: "/property",
+      amount: monthly,
+    });
+  }
+
+  /* --- ผู้เช่าที่ติดต่อไม่ได้: ทวงเงินหรือแจ้งเรื่องด่วนไม่ได้เลย --- */
+  const housed = new Set(input.leases.filter((l) => l.status === "active").map((l) => l.tenantId));
+  const noPhone = input.tenants.filter((t) => housed.has(t.id) && !t.phone.trim());
+  if (noPhone.length > 0) {
+    alerts.push({
+      id: "no-phone",
+      level: "info",
+      title: `ผู้เช่า ${noPhone.length} รายไม่มีเบอร์โทรในระบบ`,
+      detail: noPhone.map((t) => t.name).join(", "),
+      href: "/tenants",
+    });
+  }
+
+  /* --- ปัญหาที่พบตอนย้ายข้อมูลจาก V2 --- */
+  if (input.migrationIssues?.length) {
+    alerts.push({
+      id: "migration",
+      level: "info",
+      title: `ข้อมูลที่ย้ายมาจาก V2 มีจุดต้องตรวจ ${input.migrationIssues.length} เรื่อง`,
+      detail: input.migrationIssues[0],
+      href: "/settings",
+    });
+  }
+
+  return alerts.sort(
+    (a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level] || (b.amount ?? 0) - (a.amount ?? 0),
+  );
+}
+
+/** จำนวนที่ขึ้นบนกระดิ่ง — นับเฉพาะเรื่องที่ต้องรีบ ไม่งั้นตัวเลขจะบวมจนไม่มีความหมาย */
+export function badgeCount(alerts: Alert[]): number {
+  return alerts.filter((a) => a.level !== "info").length;
+}
