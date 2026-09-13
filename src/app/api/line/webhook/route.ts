@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import {
   REDEEM_MESSAGE, checkRedeemable, extractCode, type LineLink,
 } from "@/lib/line-link";
-import { getProfile, isLineConfigured, reply, text, verifySignature } from "@/lib/line";
+import { getProfile, hasLineSecret, isLineConfigured, missingLineEnv, reply, text, verifySignature } from "@/lib/line";
 import type { Tenant } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -90,7 +90,13 @@ export async function POST(request: Request) {
   const raw = await request.text();
 
   if (!verifySignature(raw, request.headers.get("x-line-signature"))) {
-    return new NextResponse("ลายเซ็นไม่ถูกต้อง", { status: 401 });
+    // แยกให้ชัดว่า "ยังไม่ได้ตั้งค่า" กับ "ลายเซ็นไม่ตรง" เพราะแก้คนละทาง
+    // ดูเฉพาะ secret เพราะลายเซ็นคิดจากตัวนั้นตัวเดียว access token ไม่เกี่ยว
+    // ถ้าดูรวมกัน จะไปโทษ access token ทั้งที่ปัญหาอยู่ที่ secret คนละ channel
+    const why = hasLineSecret()
+      ? "ลายเซ็นไม่ตรง — LINE_CHANNEL_SECRET ที่ตั้งไว้ ไม่ใช่ของ channel เดียวกับที่ยิงมา"
+      : "ยังไม่ได้ตั้ง LINE_CHANNEL_SECRET บนเซิร์ฟเวอร์นี้ (ตั้งใน Vercel แล้วต้อง Redeploy ด้วย)";
+    return new NextResponse(why, { status: 401 });
   }
 
   try {
@@ -118,7 +124,18 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true });
 }
 
-/** ให้กดทดสอบจากหน้า LINE Developers Console ได้ว่าปลายทางมีอยู่จริง */
+/**
+ * เปิดที่อยู่นี้ในเบราว์เซอร์เพื่อดูว่าเซิร์ฟเวอร์ตั้งค่าครบหรือยัง
+ * ไม่คืนค่าคีย์ออกมา บอกแค่ชื่อตัวแปรที่ยังขาด จึงเปิดดูจากมือถือได้ปลอดภัย
+ */
 export async function GET() {
-  return NextResponse.json({ ok: true, configured: isLineConfigured() });
+  const missing = missingLineEnv();
+  return NextResponse.json({
+    ok: true,
+    configured: isLineConfigured(),
+    missing,
+    hint: missing.length
+      ? `ตั้ง ${missing.join(" กับ ")} ใน Vercel แล้ว Redeploy — ตั้งเฉยๆ ไม่ Redeploy จะยังไม่มีผล`
+      : "ตั้งค่าครบแล้ว กด Verify ที่ LINE Console ได้เลย",
+  });
 }

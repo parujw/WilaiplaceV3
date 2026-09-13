@@ -26,6 +26,11 @@ export function missingLineEnv(): string[] {
   return missing;
 }
 
+/** ตรวจลายเซ็นใช้แค่ secret ตัวเดียว ไม่เกี่ยวกับ access token */
+export function hasLineSecret(): boolean {
+  return Boolean(env("LINE_CHANNEL_SECRET"));
+}
+
 export class LineError extends Error {}
 
 function token(): string {
