@@ -315,6 +315,128 @@ function LeaseForm({ lease, close }: { lease: Lease; close: () => void }) {
   );
 }
 
+/* -------------------------------- ย้ายห้อง -------------------------------- */
+
+function TransferForm({
+  lease, tenantName, roomNo, vacantRooms, close,
+}: {
+  lease: Lease;
+  tenantName: string;
+  roomNo: string;
+  vacantRooms: Array<{ id: string; roomNo: string; baseRent: number }>;
+  close: () => void;
+}) {
+  const { busy, error, run } = useAction();
+  const [toRoomId, setToRoomId] = useState(vacantRooms[0]?.id ?? "");
+  const [form, setForm] = useState({
+    moveDate: new Date().toISOString().slice(0, 10),
+    rent: "",
+    deposit: "",
+    note: "",
+  });
+  const [result, setResult] = useState<{ shortfall: number; roomNo: string } | null>(null);
+
+  const target = vacantRooms.find((r) => r.id === toRoomId);
+
+  if (vacantRooms.length === 0) {
+    return (
+      <div className="card space-y-3 p-4">
+        <h3 className="text-[16px] font-bold tracking-tight">ย้ายห้อง</h3>
+        <p className="text-[13px] leading-relaxed text-muted">
+          ตอนนี้ไม่มีห้องว่างให้ย้ายไป ถ้าจะสลับห้องกับผู้เช่าอีกคน
+          ต้องให้อีกฝ่ายย้ายออกก่อนหนึ่งคน แล้วค่อยย้ายเข้าทีละคน
+        </p>
+        <Ghost onClick={close}>ปิด</Ghost>
+      </div>
+    );
+  }
+
+  if (result) {
+    return (
+      <div className="card space-y-3 p-4">
+        <h3 className="text-[16px] font-bold tracking-tight">ย้ายไปห้อง {result.roomNo} แล้ว</h3>
+        <p className="text-[13px] leading-relaxed text-muted">
+          เงินประกันยกไปสัญญาใหม่เรียบร้อย ประวัติบิลของห้องเดิมยังอยู่ครบ
+          และยอดค้างเดิม (ถ้ามี) จะยกไปเข้าบิลของห้องใหม่ให้เอง
+        </p>
+        {result.shortfall > 0 ? (
+          <div className="rounded-xl bg-warn/12 px-4 py-3">
+            <p className="text-[13px] font-bold text-[#96690f]">
+              ต้องเก็บเงินประกันเพิ่ม {baht(result.shortfall)} บาท
+            </p>
+            <p className="mt-1 text-[12px] leading-relaxed text-[#96690f]">
+              ห้องใหม่กำหนดเงินประกันสูงกว่าที่ยกมา ระบบไม่ได้ออกบิลให้อัตโนมัติ
+              ถ้าจะเก็บ ให้ไปกดออกบิลแล้วเลือกค่ามัดจำ
+            </p>
+          </div>
+        ) : null}
+        <Ghost onClick={close}>เสร็จแล้ว</Ghost>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void run(async () => {
+          const res = await send(`/api/leases/${encodeURIComponent(lease.id)}/transfer`, "POST", {
+            toRoomId,
+            ...form,
+          });
+          setResult({ shortfall: Number(res.depositShortfall ?? 0), roomNo: String(res.roomNo ?? "") });
+        });
+      }}
+      className="card space-y-3 p-4"
+    >
+      <h3 className="text-[16px] font-bold tracking-tight">ย้าย{tenantName}ไปห้องอื่น</h3>
+      <p className="text-[12px] leading-relaxed text-muted">
+        ระบบจะปิดสัญญาห้อง {roomNo} แล้วเปิดสัญญาใหม่ให้ที่ห้องปลายทาง
+        ไม่ใช่ย้ายสัญญาเดิมข้ามห้อง เพราะบิลที่ออกไปแล้วต้องยังเป็นของห้องเดิม
+        <br />
+        เงินประกัน {baht(lease.deposit)} บาท ยกไปสัญญาใหม่ ไม่ต้องคืนแล้วเก็บใหม่
+      </p>
+
+      <Field label="ย้ายไปห้อง">
+        <Select value={toRoomId} onChange={(e) => setToRoomId(e.target.value)} required>
+          {vacantRooms.map((r) => (
+            <option key={r.id} value={r.id}>ห้อง {r.roomNo} · ราคาป้าย {baht(r.baseRent)}</option>
+          ))}
+        </Select>
+      </Field>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="วันที่ย้าย">
+          <Input type="date" value={form.moveDate} onChange={(e) => setForm({ ...form, moveDate: e.target.value })} />
+        </Field>
+        <Field label="ค่าเช่าใหม่" hint={target ? `เว้นว่าง = ${baht(target.baseRent)}` : undefined}>
+          <Input
+            type="number" inputMode="numeric" min="0" placeholder={target ? String(target.baseRent) : ""}
+            value={form.rent} onChange={(e) => setForm({ ...form, rent: e.target.value })}
+          />
+        </Field>
+      </div>
+
+      <Field label="เงินประกันห้องใหม่" hint={`เว้นว่าง = ยกก้อนเดิม ${baht(lease.deposit)} บาทมาทั้งหมด`}>
+        <Input
+          type="number" inputMode="numeric" min="0" placeholder={String(lease.deposit)}
+          value={form.deposit} onChange={(e) => setForm({ ...form, deposit: e.target.value })}
+        />
+      </Field>
+
+      <Field label="หมายเหตุ">
+        <Input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="เช่น ขอย้ายไปห้องมุม" />
+      </Field>
+
+      {error ? <Alert tone="danger">{error}</Alert> : null}
+      <div className="grid grid-cols-2 gap-3">
+        <Ghost onClick={close} disabled={busy}>ยกเลิก</Ghost>
+        <Submit busy={busy}>ยืนยันย้ายห้อง</Submit>
+      </div>
+    </form>
+  );
+}
+
 /* -------------------------------- ย้ายออก -------------------------------- */
 
 function MoveOutForm({ lease, tenantName, close }: { lease: Lease; tenantName: string; close: () => void }) {
@@ -389,13 +511,15 @@ function MoveOutForm({ lease, tenantName, close }: { lease: Lease; tenantName: s
 /* --------------------------------- ตัวหลัก -------------------------------- */
 
 export function RoomManager({
-  room, lease, tenant, pastTenants, defaults,
+  room, lease, tenant, pastTenants, defaults, vacantRooms,
 }: {
   room: Room;
   lease: Lease | null;
   tenant: Tenant | null;
   pastTenants: Array<{ id: string; name: string }>;
   defaults: { rates: Rates; dueDay: number };
+  /** ห้องว่างอื่นๆ ในอาคาร ใช้เป็นปลายทางตอนย้ายห้อง */
+  vacantRooms: Array<{ id: string; roomNo: string; baseRent: number }>;
 }) {
   return (
     <div className="space-y-3">
@@ -407,6 +531,17 @@ export function RoomManager({
         <>
           <Expander label="แก้ไขสัญญาเช่า">
             {(close) => <LeaseForm lease={lease} close={close} />}
+          </Expander>
+          <Expander label="ย้ายไปห้องอื่น">
+            {(close) => (
+              <TransferForm
+                lease={lease}
+                tenantName={tenant?.nickname || tenant?.name || "ผู้เช่า"}
+                roomNo={room.roomNo}
+                vacantRooms={vacantRooms}
+                close={close}
+              />
+            )}
           </Expander>
           <Expander label="บันทึกย้ายออก" tone="danger">
             {(close) => <MoveOutForm lease={lease} tenantName={tenant?.name ?? "ผู้เช่า"} close={close} />}

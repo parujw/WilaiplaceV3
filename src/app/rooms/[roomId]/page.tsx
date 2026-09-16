@@ -6,7 +6,7 @@ import { RoomManager } from "@/components/RoomManager";
 import { Avatar, Badge, EmptyState, RowLink, SectionHeader } from "@/components/ui";
 import { BILL_STATUS_LABEL, CONDITION_LABEL, baht, cycleLabel, thaiDate } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
-import { getRoomView, listBills, listLeases, listTenants } from "@/lib/repo";
+import { getRoomView, getRoomViews, listBills, listLeases, listTenants } from "@/lib/repo";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +25,11 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
   // คนที่เคยอยู่แต่ตอนนี้ไม่มีสัญญาเดินอยู่ — ให้เลือกได้ตอนกลับมาเช่าใหม่ จะได้ไม่มีรหัสซ้ำสองใบ
   const [tenants, leases] = await Promise.all([listTenants(property.id), listLeases(property.id)]);
   const housed = new Set(leases.filter((l) => l.status === "active").map((l) => l.tenantId));
+  // ห้องว่างอื่นๆ ใช้เป็นปลายทางตอนย้ายห้อง
+  const vacantRooms = (await getRoomViews(property.id))
+    .filter((v) => !v.lease && v.room.id !== room.id)
+    .map((v) => ({ id: v.room.id, roomNo: v.room.roomNo, baseRent: v.room.baseRent }));
+
   const pastTenants = tenants
     .filter((t) => !housed.has(t.id))
     .map((t) => ({ id: t.id, name: t.name }))
@@ -105,6 +110,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
           tenant={tenant}
           pastTenants={pastTenants}
           defaults={{ rates: property.defaultRates, dueDay: property.paymentDueDay }}
+          vacantRooms={vacantRooms}
         />
       </section>
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   LeaseOpError, buildLease, leaseTermsPatch, moveOutPatch, nextCode, roomEditPatch, tenantEditPatch,
+  transferPlan,
 } from "./lease-ops";
 import type { Lease, Rates, Room, Tenant } from "./types";
 
@@ -132,5 +133,67 @@ describe("moveOutPatch", () => {
 
   it("สัญญาที่ปิดไปแล้วปิดซ้ำไม่ได้", () => {
     expect(() => moveOutPatch(lease({ status: "ended" }), {})).toThrow(/ปิดไปแล้ว/);
+  });
+});
+
+
+describe("transferPlan", () => {
+  const from = room({ id: "wlp1-502", roomNo: "502" });
+  const to = room({ id: "wlp1-503", roomNo: "503", baseRent: 4500, activeLeaseId: null });
+  const active = lease({ id: "L-T0019", roomId: "wlp1-502", status: "active", deposit: 8000, rent: 4000 });
+  const plan = (over: Partial<Parameters<typeof transferPlan>[0]> = {}) =>
+    transferPlan({ lease: active, fromRoom: from, toRoom: to, toLeaseId: "L-T0019-2", input: {}, ...over });
+
+  it("ปิดสัญญาเดิมแล้วเปิดใหม่ ไม่ใช่ย้าย roomId ของสัญญาเดิม", () => {
+    const p = plan();
+    expect(p.from).toMatchObject({ status: "ended", endedReason: "ย้ายไปห้อง 503", transferredTo: "L-T0019-2" });
+    expect(p.to).toMatchObject({ id: "L-T0019-2", roomId: "wlp1-503", status: "active", transferredFrom: "L-T0019" });
+    expect(p.to.tenantId).toBe(active.tenantId);
+  });
+
+  it("เงินประกันยกไปสัญญาใหม่ ไม่ใช่คืนแล้วเก็บใหม่", () => {
+    const p = plan();
+    expect(p.carriedDeposit).toBe(8000);
+    expect(p.to.deposit).toBe(8000);
+    expect(p.depositShortfall).toBe(0);
+    // สัญญาเดิมต้องไม่บันทึกว่าคืนเงินประกัน เพราะเงินไม่ได้ออกจากมือใคร
+    expect(p.from).not.toHaveProperty("depositRefund");
+  });
+
+  it("ห้องใหม่เงินประกันแพงกว่า บอกส่วนต่างที่ต้องเก็บเพิ่ม", () => {
+    const p = plan({ input: { deposit: 9000 } });
+    expect(p.to.deposit).toBe(9000);
+    expect(p.depositShortfall).toBe(1000);
+  });
+
+  it("ไม่ระบุค่าเช่า ใช้ราคาป้ายของห้องใหม่", () => {
+    expect(plan().to.rent).toBe(4500);
+    expect(plan({ input: { rent: 4200 } }).to.rent).toBe(4200);
+  });
+
+  it("เงื่อนไขอื่นยกมาจากสัญญาเดิม ค่าน้ำค่าไฟกับวันครบกำหนดไม่ควรเปลี่ยนเพราะย้ายห้อง", () => {
+    const p = plan();
+    expect(p.to.rates).toEqual(active.rates);
+    expect(p.to.dueDay).toBe(active.dueDay);
+  });
+
+  it("ห้องปลายทางมีคนอยู่แล้วย้ายไม่ได้", () => {
+    expect(() => plan({ toRoom: room({ id: "wlp1-503", roomNo: "503", activeLeaseId: "L-อื่น" }) })).toThrow(/มีผู้เช่าอยู่แล้ว/);
+  });
+
+  it("ย้ายไปห้องเดิมไม่ได้", () => {
+    expect(() => plan({ toRoom: from })).toThrow(/ห้องเดิม/);
+  });
+
+  it("สัญญาที่ปิดไปแล้วย้ายไม่ได้", () => {
+    expect(() => plan({ lease: lease({ status: "ended" }) })).toThrow(/ไม่ได้ใช้งานอยู่/);
+  });
+
+  it("วันย้ายมาก่อนวันเริ่มสัญญาเดิมไม่ได้", () => {
+    expect(() => plan({ input: { moveDate: "2025-01-01" } })).toThrow(/ไม่มาก่อน/);
+  });
+
+  it("ไม่มีคีย์ที่เป็น undefined เพราะ Firestore ปฏิเสธทั้งเอกสาร", () => {
+    for (const [key, value] of Object.entries(plan().to)) expect(value, key).not.toBeUndefined();
   });
 });

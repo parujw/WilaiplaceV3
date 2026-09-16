@@ -25,14 +25,26 @@ export interface MeterRow {
   otherBillNos: string[];
 }
 
-type Entry = { elec: string; water: string };
+/**
+ * เลขที่กรอกในรอบนี้ และเลขเดิมที่แก้ได้
+ *
+ * เลขเดิมมาจากที่จดไว้รอบก่อน ปกติไม่ต้องแตะ แต่ถ้ารอบก่อนจดผิด
+ * หน่วยที่คิดได้ในรอบนี้จะผิดตามไปด้วย จึงให้แก้ตรงนี้ได้เลย
+ * แก้แล้วมีผลกับบิลใบนี้เท่านั้น ไม่ย้อนไปแก้บิลเก่า — ใบเก่าที่ผิดต้องไปแก้ที่ใบนั้น
+ */
+type Entry = { elec: string; water: string; elecPrev: string; waterPrev: string };
 
 export function MeterSheet({ cycle, rows }: { cycle: string; rows: MeterRow[] }) {
   const router = useRouter();
   const pending = rows.filter((r) => !r.billedBillNo);
 
   const [entries, setEntries] = useState<Record<string, Entry>>(() =>
-    Object.fromEntries(rows.map((r) => [r.roomId, { elec: "", water: "" }])),
+    Object.fromEntries(
+      rows.map((r) => [
+        r.roomId,
+        { elec: "", water: "", elecPrev: String(r.elecPrevious), waterPrev: String(r.waterPrevious) },
+      ]),
+    ),
   );
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ created: number; total: number; skipped: string[] } | null>(null);
@@ -40,17 +52,27 @@ export function MeterSheet({ cycle, rows }: { cycle: string; rows: MeterRow[] })
 
   const preview = useMemo(() => {
     return pending.map((row) => {
-      const entry = entries[row.roomId] ?? { elec: "", water: "" };
+      const entry = entries[row.roomId] ?? {
+        elec: "", water: "", elecPrev: String(row.elecPrevious), waterPrev: String(row.waterPrevious),
+      };
       const hasElec = entry.elec.trim() !== "";
       const hasWater = entry.water.trim() !== "";
-      const elecCurrent = hasElec ? Number(entry.elec) : row.elecPrevious;
-      const waterCurrent = hasWater ? Number(entry.water) : row.waterPrevious;
-      const elecUnits = meterUnits(row.elecPrevious, elecCurrent);
-      const waterUnits = meterUnits(row.waterPrevious, waterCurrent);
+      // เลขเดิมที่ลบทิ้งจนว่างให้ถือเป็น 0 ไม่ใช่ NaN ที่จะทำให้ยอดเพี้ยนเงียบๆ
+      const elecPrevious = entry.elecPrev.trim() === "" ? 0 : Number(entry.elecPrev);
+      const waterPrevious = entry.waterPrev.trim() === "" ? 0 : Number(entry.waterPrev);
+      const elecCurrent = hasElec ? Number(entry.elec) : elecPrevious;
+      const waterCurrent = hasWater ? Number(entry.water) : waterPrevious;
+      const elecUnits = meterUnits(elecPrevious, elecCurrent);
+      const waterUnits = meterUnits(waterPrevious, waterCurrent);
       const total =
         row.rent + elecUnits * row.elecRate + waterUnits * row.waterRate +
         row.acFee + row.internetFee + row.parkingFee + row.carryOver;
-      return { row, entry, ready: hasElec && hasWater, elecCurrent, waterCurrent, elecUnits, waterUnits, total };
+      return {
+        row, entry, ready: hasElec && hasWater,
+        elecPrevious, waterPrevious, elecCurrent, waterCurrent, elecUnits, waterUnits, total,
+        // บอกให้เห็นว่าแก้เลขเดิมไปจากที่ระบบจำไว้ จะได้ไม่แก้ค้างไว้โดยไม่ตั้งใจ
+        prevEdited: elecPrevious !== row.elecPrevious || waterPrevious !== row.waterPrevious,
+      };
     });
   }, [entries, pending]);
 
@@ -73,6 +95,8 @@ export function MeterSheet({ cycle, rows }: { cycle: string; rows: MeterRow[] })
           cycle,
           readings: ready.map((p) => ({
             roomId: p.row.roomId,
+            elecPrevious: p.elecPrevious,
+            waterPrevious: p.waterPrevious,
             elecCurrent: p.elecCurrent,
             waterCurrent: p.waterCurrent,
           })),
@@ -83,7 +107,12 @@ export function MeterSheet({ cycle, rows }: { cycle: string; rows: MeterRow[] })
       setResult({ created: json.created.length, total: json.total, skipped: json.skipped ?? [] });
       setEntries((prev) => {
         const next = { ...prev };
-        for (const p of ready) next[p.row.roomId] = { elec: "", water: "" };
+        for (const p of ready) {
+          next[p.row.roomId] = {
+            elec: "", water: "",
+            elecPrev: String(p.row.elecPrevious), waterPrev: String(p.row.waterPrevious),
+          };
+        }
         return next;
       });
       router.refresh();
@@ -119,7 +148,7 @@ export function MeterSheet({ cycle, rows }: { cycle: string; rows: MeterRow[] })
         </div>
       ) : (
         <div className="space-y-2.5">
-          {preview.map(({ row, entry, ready: rowReady, elecUnits, waterUnits, total }) => (
+          {preview.map(({ row, entry, ready: rowReady, elecUnits, waterUnits, total, elecPrevious, waterPrevious, prevEdited }) => (
             <div key={row.roomId} className={`card p-4 ${rowReady ? "ring-1 ring-accent/30" : ""}`}>
               <div className="flex items-baseline justify-between gap-3">
                 <div className="min-w-0">
@@ -135,13 +164,21 @@ export function MeterSheet({ cycle, rows }: { cycle: string; rows: MeterRow[] })
               </div>
 
               <div className="mt-3 grid grid-cols-2 gap-3">
+                {/* เลขเดิมแก้ได้ เผื่อรอบก่อนจดผิด — ปกติไม่ต้องแตะ ค่าที่โชว์คือของรอบก่อน */}
                 <label className="block">
-                  <span className="mb-1 flex items-baseline justify-between text-[11px] text-muted">
+                  <span className="mb-1 flex items-baseline justify-between gap-1 text-[11px] text-muted">
                     <span>มิเตอร์ไฟ</span>
-                    <span>เดิม {row.elecPrevious}</span>
+                    <span className="flex items-baseline gap-1">
+                      เดิม
+                      <input
+                        type="text" inputMode="numeric" aria-label={`แก้เลขมิเตอร์ไฟเดิมของห้อง ${row.roomNo}`}
+                        value={entry.elecPrev} onChange={(e) => update(row.roomId, "elecPrev", e.target.value)}
+                        className="w-14 rounded-md bg-surface-2 px-1.5 py-0.5 text-right text-[11px] tabular-nums outline-none focus:bg-accent-soft"
+                      />
+                    </span>
                   </span>
                   <input
-                    type="text" inputMode="numeric" placeholder={String(row.elecPrevious)}
+                    type="text" inputMode="numeric" placeholder={String(elecPrevious)}
                     value={entry.elec} onChange={(e) => update(row.roomId, "elec", e.target.value)}
                     className={input}
                   />
@@ -151,12 +188,19 @@ export function MeterSheet({ cycle, rows }: { cycle: string; rows: MeterRow[] })
                 </label>
 
                 <label className="block">
-                  <span className="mb-1 flex items-baseline justify-between text-[11px] text-muted">
+                  <span className="mb-1 flex items-baseline justify-between gap-1 text-[11px] text-muted">
                     <span>มิเตอร์น้ำ</span>
-                    <span>เดิม {row.waterPrevious}</span>
+                    <span className="flex items-baseline gap-1">
+                      เดิม
+                      <input
+                        type="text" inputMode="numeric" aria-label={`แก้เลขมิเตอร์น้ำเดิมของห้อง ${row.roomNo}`}
+                        value={entry.waterPrev} onChange={(e) => update(row.roomId, "waterPrev", e.target.value)}
+                        className="w-14 rounded-md bg-surface-2 px-1.5 py-0.5 text-right text-[11px] tabular-nums outline-none focus:bg-accent-soft"
+                      />
+                    </span>
                   </span>
                   <input
-                    type="text" inputMode="numeric" placeholder={String(row.waterPrevious)}
+                    type="text" inputMode="numeric" placeholder={String(waterPrevious)}
                     value={entry.water} onChange={(e) => update(row.roomId, "water", e.target.value)}
                     className={input}
                   />
@@ -165,6 +209,12 @@ export function MeterSheet({ cycle, rows }: { cycle: string; rows: MeterRow[] })
                   </span>
                 </label>
               </div>
+
+              {prevEdited ? (
+                <p className="mt-2 text-[11px] font-semibold text-[#96690f]">
+                  แก้เลขเดิมจากที่ระบบจำไว้ ({row.elecPrevious} / {row.waterPrevious}) มีผลกับบิลใบนี้เท่านั้น
+                </p>
+              ) : null}
 
               {row.carryOver > 0 ? (
                 <p className="mt-2 text-[12px] font-semibold text-danger">

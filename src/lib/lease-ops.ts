@@ -259,6 +259,94 @@ export function buildLease(args: {
   };
 }
 
+/* --------------------------------- ย้ายห้อง -------------------------------- */
+
+export interface TransferInput {
+  moveDate?: string | null;
+  /** ค่าเช่าห้องใหม่ ไม่ระบุ = ใช้ราคาป้ายของห้องใหม่ */
+  rent?: number | string;
+  /** เงินประกันที่ห้องใหม่ควรมี ไม่ระบุ = ยกก้อนเดิมมาเท่าไหร่ก็เท่านั้น */
+  deposit?: number | string;
+  note?: string;
+}
+
+export interface TransferPlan {
+  /** สิ่งที่ต้องเขียนลงสัญญาเดิม */
+  from: Record<string, unknown>;
+  /** สัญญาใหม่ของห้องใหม่ */
+  to: Lease;
+  /** เงินประกันที่ยกมาจากสัญญาเดิม */
+  carriedDeposit: number;
+  /** ต้องเก็บเพิ่มอีกเท่าไหร่ถึงจะครบตามเงินประกันห้องใหม่ — 0 = ไม่ต้องเก็บ */
+  depositShortfall: number;
+}
+
+/**
+ * ย้ายผู้เช่าไปอีกห้อง
+ *
+ * ไม่ใช่การแก้ roomId ของสัญญาเดิม เพราะบิลที่ออกไปแล้วชี้มาที่ leaseId กับ roomId
+ * ย้ายปลายทางเมื่อไหร่ บิลเดือนก่อนของห้องเดิมจะกลายเป็นของห้องใหม่ ประวัติจะเล่าเรื่องผิด
+ * จึงปิดสัญญาเดิม เปิดสัญญาใหม่ แล้วโยงกันด้วย transferredTo / transferredFrom
+ *
+ * เงินประกันยกไปสัญญาใหม่ ไม่ใช่คืนแล้วเก็บใหม่ — เงินไม่ได้ออกจากมือใครจริง
+ * ถ้าห้องใหม่ควรมีเงินประกันมากกว่าเดิม จะบอกส่วนต่างกลับไปให้ไปออกบิลเก็บเพิ่มเอง
+ * ไม่ออกบิลให้อัตโนมัติ เพราะบางทีเจ้าของก็ไม่เก็บเพิ่ม
+ */
+export function transferPlan(args: {
+  lease: Lease;
+  fromRoom: Room;
+  toRoom: Room;
+  toLeaseId: string;
+  input: TransferInput;
+}): TransferPlan {
+  const { lease, fromRoom, toRoom, toLeaseId, input } = args;
+
+  if (lease.status !== "active") throw new LeaseOpError("สัญญานี้ไม่ได้ใช้งานอยู่ ย้ายห้องไม่ได้");
+  if (toRoom.id === fromRoom.id) throw new LeaseOpError("ห้องปลายทางเป็นห้องเดิม");
+  if (toRoom.activeLeaseId) throw new LeaseOpError(`ห้อง ${toRoom.roomNo} มีผู้เช่าอยู่แล้ว ต้องให้เขาย้ายออกก่อน`);
+
+  const moveDate = optionalDate(input.moveDate ?? new Date().toISOString().slice(0, 10), "วันย้าย");
+  if (moveDate && lease.startDate && moveDate < lease.startDate) {
+    throw new LeaseOpError("วันย้ายต้องไม่มาก่อนวันเริ่มสัญญาเดิม");
+  }
+
+  const carriedDeposit = lease.deposit;
+  const wantedDeposit = input.deposit === undefined || input.deposit === ""
+    ? carriedDeposit
+    : num(input.deposit, "เงินประกันห้องใหม่");
+
+  const to: Lease = {
+    id: toLeaseId,
+    propertyId: lease.propertyId,
+    roomId: toRoom.id,
+    tenantId: lease.tenantId,
+    status: "active",
+    startDate: moveDate,
+    endDate: lease.endDate,
+    rent: input.rent === undefined || input.rent === "" ? toRoom.baseRent : num(input.rent, "ค่าเช่า"),
+    // เงินประกันในสัญญาใหม่คือยอดที่ตกลงกันไว้ ส่วนที่ยังเก็บไม่ครบบอกแยกใน depositShortfall
+    deposit: wantedDeposit,
+    advance: lease.advance,
+    rates: lease.rates,
+    dueDay: lease.dueDay,
+    depositRefund: null,
+    transferredFrom: lease.id,
+    ...defined({ note: input.note?.trim() || undefined }),
+  };
+
+  return {
+    from: {
+      status: "ended",
+      endDate: moveDate,
+      endedReason: `ย้ายไปห้อง ${toRoom.roomNo}`,
+      transferredTo: toLeaseId,
+    },
+    to,
+    carriedDeposit,
+    depositShortfall: Math.max(0, wantedDeposit - carriedDeposit),
+  };
+}
+
 export interface MoveOutInput {
   endDate?: string | null;
   reason?: string;

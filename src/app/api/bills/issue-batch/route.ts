@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { buildBill, dueDateFor, hasRentBill, lastReadingFor } from "@/lib/billing";
 import { db } from "@/lib/db";
-import { audit, getRoomViews, listBills, listMeterReadings, nextBillNo } from "@/lib/repo";
+import { audit, getRoomViews, listBills, listLeases, listMeterReadings, nextBillNo } from "@/lib/repo";
+import { carryOverFor, tenancyLeaseIds } from "@/lib/tenancy";
 import { getSelectedPropertyId, getSessionUser } from "@/lib/session";
 import type { WriteOp } from "@/lib/db/store";
 import type { Bill, MeterReading } from "@/lib/types";
 
 interface ReadingInput {
   roomId: string;
+  /** เลขเดิมที่คนจดแก้มาเอง เผื่อรอบก่อนจดผิด ไม่ส่งมาก็ใช้ที่จดไว้รอบก่อน */
+  elecPrevious?: number;
+  waterPrevious?: number;
   elecCurrent: number;
   waterCurrent: number;
   discount?: number;
@@ -34,11 +38,13 @@ export async function POST(request: Request) {
   const inputs = (body.readings ?? []).filter((r) => r?.roomId);
   if (inputs.length === 0) return NextResponse.json({ error: "ไม่มีห้องที่จะออกบิล" }, { status: 400 });
 
-  const [views, existing, readings] = await Promise.all([
+  const [views, allBills, readings, leases] = await Promise.all([
     getRoomViews(propertyId),
-    listBills(propertyId, { cycle }),
+    listBills(propertyId),
     listMeterReadings(propertyId),
+    listLeases(propertyId),
   ]);
+  const existing = allBills.filter((b) => b.cycle === cycle);
 
   const viewByRoom = new Map(views.map((v) => [v.room.id, v]));
   // บล็อกเฉพาะห้องที่มีบิลค่าเช่าของรอบนี้แล้ว บิลมัดจำหรือบิลค่าซ่อมไม่นับ
@@ -66,9 +72,20 @@ export async function POST(request: Request) {
       continue;
     }
 
+    // เลขเดิมมาจากที่จดไว้รอบก่อน แต่ถ้าคนจดแก้มา ให้เชื่อคนจด
+    // รอบก่อนจดผิดแล้วไม่ให้แก้ หน่วยของรอบนี้จะผิดตามไปด้วยโดยที่แก้ไม่ได้เลย
+    // แก้ตรงนี้มีผลกับบิลใบใหม่เท่านั้น ไม่ย้อนไปแก้บิลเก่าที่ออกไปแล้ว
     const previous = lastReadingFor(readings, room.id, cycle);
-    const elecPrevious = previous?.elecCurrent ?? 0;
-    const waterPrevious = previous?.waterCurrent ?? 0;
+    const elecPrevious = Number.isFinite(Number(input.elecPrevious))
+      ? Number(input.elecPrevious)
+      : (previous?.elecCurrent ?? 0);
+    const waterPrevious = Number.isFinite(Number(input.waterPrevious))
+      ? Number(input.waterPrevious)
+      : (previous?.waterCurrent ?? 0);
+    if (elecPrevious < 0 || waterPrevious < 0) {
+      skipped.push(`ห้อง ${room.roomNo}: เลขมิเตอร์เดิมติดลบไม่ได้`);
+      continue;
+    }
     const elecCurrent = Number(input.elecCurrent);
     const waterCurrent = Number(input.waterCurrent);
     if (!Number.isFinite(elecCurrent) || !Number.isFinite(waterCurrent)) {
@@ -77,10 +94,15 @@ export async function POST(request: Request) {
     }
 
     // ยอดค้างจากบิลเก่ายกมาใส่บิลใหม่ ไม่ให้หนี้หาย
-    const older = await listBills(propertyId, { roomId: room.id });
-    const carryOver = older
-      .filter((b) => b.cycle < cycle && b.status !== "void")
-      .reduce((sum, b) => sum + b.balance, 0);
+    // แต่ต้องเป็นหนี้ของการเช่าครั้งนี้เท่านั้น ของเดิมคิดจากห้องอย่างเดียว
+    // ผู้เช่าใหม่ที่เข้ามาห้องที่คนเก่าค้างเงินไว้ จะโดนยอดค้างของคนเก่าใส่เข้าบิล
+    // ส่วนคนที่ย้ายห้อง หนี้ก้อนเดิมก็ยังตามไปห้องใหม่ถูกต้อง
+    const carryOver = carryOverFor(
+      allBills,
+      tenancyLeaseIds(leases, room.activeLeaseId),
+      tenant.id,
+      cycle,
+    );
 
     const extras =
       input.extraLabel && Number(input.extraAmount)

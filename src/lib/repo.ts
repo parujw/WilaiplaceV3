@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { buildAlerts, type Alert } from "./alerts";
+import { outstandingOfTenancy, tenancyLeaseIds } from "./tenancy";
 import { currentCycle, daysOverdue, dueDateFor, previousCycle } from "./billing";
 import {
   actualsByCycle, collectionRate, expirySchedule, recurringMonthly, rentBand, vacancyLoss,
@@ -67,22 +68,24 @@ export async function getRoomViews(propertyId: string): Promise<RoomView[]> {
     if (!known || r.cycle > known.cycle) latestReading.set(r.roomId, r);
   }
 
-  const outstanding = new Map<string, number>();
-  for (const b of bills) {
-    if (b.status === "void" || b.status === "paid") continue;
-    outstanding.set(b.roomId, (outstanding.get(b.roomId) ?? 0) + b.balance);
-  }
-
   return rooms
     .sort((a, b) => a.roomNo.localeCompare(b.roomNo))
     .map((room) => {
       const lease = room.activeLeaseId ? (leaseById.get(room.activeLeaseId) ?? null) : null;
+      const tenant = lease ? (tenantById.get(lease.tenantId) ?? null) : null;
+
       return {
         room,
         lease,
-        tenant: lease ? (tenantById.get(lease.tenantId) ?? null) : null,
+        tenant,
         lastReading: latestReading.get(room.id) ?? null,
-        outstanding: outstanding.get(room.id) ?? 0,
+        // ยอดค้างของคนที่อยู่ห้องนี้ตอนนี้เท่านั้น ไม่ใช่ของทุกคนที่เคยอยู่ห้องนี้
+        // ห้องว่างจึงเป็น 0 เสมอ ส่วนหนี้ของคนเก่ายังตามตัวได้จากหน้าผู้เช่าและหน้าบิล
+        outstanding: outstandingOfTenancy(
+          bills,
+          tenancyLeaseIds(leases, room.activeLeaseId),
+          tenant?.id ?? null,
+        ),
       };
     });
 }
