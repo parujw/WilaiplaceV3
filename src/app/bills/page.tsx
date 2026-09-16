@@ -69,7 +69,9 @@ export default async function BillsPage({
           <h1 className="text-[22px] font-bold leading-tight tracking-tight">บิล</h1>
           <p className="text-[13px] text-muted">{bills.length} รายการ · {property.name}</p>
         </div>
-        <Link href="/meter" className="rounded-full bg-accent px-4 py-2.5 text-[13px] font-bold text-white">
+        {/* ออกบิลใบเดียวแบบกรอกเอง — ค่าเช่าทั้งตึกอยู่ในหน้านั้นอีกที
+            ของเดิมพาไปหน้าจดมิเตอร์ตรงๆ ทำให้ออกบิลมัดจำหรือค่าซ่อมไม่ได้เลย */}
+        <Link href="/bills/new" className="rounded-full bg-accent px-4 py-2.5 text-[13px] font-bold text-white">
           ออกบิล
         </Link>
       </header>
