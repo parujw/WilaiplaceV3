@@ -166,3 +166,46 @@ describe("badgeCount", () => {
     expect(badgeCount(buildAlerts(clean))).toBe(0);
   });
 });
+
+
+describe("บิลงวดสุดท้ายของคนที่ย้ายออกกลางรอบ", () => {
+  const ended = lease({ id: "L-เก่า", status: "ended", endDate: "2026-09-16" });
+  const vacant = view({ room: room({ activeLeaseId: null }), lease: null, tenant: null });
+  const base = (over: Partial<AlertInput> = {}) =>
+    input({ views: [vacant], leases: [ended], ...over });
+
+  it("ย้ายออกกลางรอบแล้วยังไม่มีบิลของสัญญานั้น ต้องเตือน", () => {
+    expect(ids(base())).toContain("final-bill-L-เก่า");
+  });
+
+  it("ออกบิลงวดสุดท้ายแล้วหายไป", () => {
+    const finalBill = bill({ id: "F", leaseId: "L-เก่า", cycle: "202609" });
+    expect(ids(base({ bills: [finalBill] }))).not.toContain("final-bill-L-เก่า");
+  });
+
+  it("บิลที่ยกเลิกไม่นับว่าออกแล้ว", () => {
+    const voided = bill({ id: "F", leaseId: "L-เก่า", cycle: "202609", status: "void" });
+    expect(ids(base({ bills: [voided] }))).toContain("final-bill-L-เก่า");
+  });
+
+  it("จบรอบก่อนไม่ต้องเตือนค้างไว้ตลอด", () => {
+    expect(ids(base({ leases: [lease({ id: "L-เก่า", status: "ended", endDate: "2026-08-20" })] })))
+      .not.toContain("final-bill-L-เก่า");
+  });
+
+  it("สัญญาที่ยังเดินอยู่ไม่เตือน", () => {
+    expect(ids(base({ leases: [lease({ id: "L-เก่า", endDate: "2026-09-16" })] })))
+      .not.toContain("final-bill-L-เก่า");
+  });
+
+  it("แยกคำว่าย้ายห้องกับย้ายออกให้ถูก", () => {
+    const moved = lease({ id: "L-ย้าย", status: "ended", endDate: "2026-09-16", transferredTo: "L-ใหม่" });
+    const found = buildAlerts(base({ leases: [moved] })).find((a) => a.id === "final-bill-L-ย้าย");
+    expect(found?.detail).toContain("ย้ายห้อง");
+  });
+
+  it("เป็นแค่เครื่องเตือน ไม่ขึ้นตัวเลขบนกระดิ่ง", () => {
+    const only = buildAlerts(base()).filter((a) => a.id === "final-bill-L-เก่า");
+    expect(only[0].level).toBe("info");
+  });
+});

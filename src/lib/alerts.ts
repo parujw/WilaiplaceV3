@@ -109,6 +109,37 @@ export function buildAlerts(input: AlertInput): Alert[] {
     });
   }
 
+  /* --- คนที่ย้ายออกหรือย้ายห้องกลางรอบ ยังไม่ได้เก็บค่าน้ำไฟงวดสุดท้าย --- */
+  //
+  // ห้องที่ว่างแล้วจะหายไปจากหน้าจดมิเตอร์ เพราะหน้านั้นแสดงเฉพาะห้องที่มีสัญญาเดินอยู่
+  // พอถึงสิ้นเดือนจึงมองไม่เห็นว่ายังมีค่าน้ำไฟของคนที่อยู่มาครึ่งเดือนค้างอยู่
+  // เป็นรายได้ที่หายไปเงียบๆ โดยไม่มีอะไรบอก
+  //
+  // ไม่นับเป็นเรื่องเร่งด่วน เพราะบางทีเจ้าของก็ไม่เก็บงวดสุดท้าย เป็นแค่เครื่องเตือน
+  const roomByLeaseId = new Map(input.views.map((v) => [v.lease?.id, v.room]));
+  const billedLeases = new Set(
+    input.bills.filter((b) => b.cycle === cycle && b.status !== "void").map((b) => b.leaseId),
+  );
+
+  for (const lease of input.leases) {
+    if (lease.status !== "ended" || !lease.endDate) continue;
+    // จบในรอบนี้เท่านั้น รอบเก่าที่ผ่านไปแล้วไม่ต้องเตือนค้างไว้ตลอด
+    if (lease.endDate.slice(0, 4) + lease.endDate.slice(5, 7) !== cycle) continue;
+    if (billedLeases.has(lease.id)) continue;
+
+    const tenant = input.tenants.find((t) => t.id === lease.tenantId);
+    const moved = Boolean(lease.transferredTo);
+    alerts.push({
+      id: `final-bill-${lease.id}`,
+      level: "info",
+      title: `ยังไม่ได้ออกบิลงวดสุดท้ายให้${tenant?.name ?? "ผู้เช่าที่ย้ายออก"}`,
+      detail:
+        `${moved ? "ย้ายห้อง" : "ย้ายออก"}เมื่อ ${thaiDate(lease.endDate)}` +
+        ` · ห้องเดิมหายจากหน้าจดมิเตอร์แล้ว ถ้าจะเก็บค่าน้ำไฟถึงวันย้าย ให้กดออกบิลเอง`,
+      href: "/bills/new",
+    });
+  }
+
   /* --- งานซ่อมที่ยังไม่ปิด --- */
   for (const ticket of input.maintenance.filter((m) => m.status === "open" || m.status === "in_progress")) {
     alerts.push({
