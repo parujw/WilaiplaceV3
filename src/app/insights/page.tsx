@@ -3,8 +3,9 @@ import { IconChart, IconDoor, IconWallet } from "@/components/icons";
 import { EmptyState, SectionHeader } from "@/components/ui";
 import { baht, cycleLabel } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
-import { getInsights } from "@/lib/repo";
+import { availableCycles, getInsights } from "@/lib/repo";
 import { Forecast } from "./Forecast";
+import { RevenueMix } from "./RevenueMix";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ function Metric({
 
 export default async function InsightsPage() {
   const { property } = await requireContext();
-  const data = await getInsights(property.id);
+  const [data, cycles] = await Promise.all([getInsights(property.id), availableCycles(property.id)]);
 
   const occupancy = data.rooms === 0 ? 0 : data.occupied / data.rooms;
   // เต็มทุกห้อง = ค่าเช่าที่เก็บอยู่จริง + ราคาป้ายของห้องที่ยังว่าง
@@ -119,6 +120,11 @@ export default async function InsightsPage() {
           </div>
         </section>
       ) : null}
+
+      <section className="px-4 pt-6">
+        <SectionHeader title="รายได้มาจากอะไร" action="เลือกรอบได้" />
+        <RevenueMix bills={data.bills} cycles={cycles} />
+      </section>
 
       <section className="px-4 pt-6">
         <SectionHeader title="ประมาณการรายได้" action="ปรับสมมติฐานได้" />

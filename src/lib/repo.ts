@@ -325,6 +325,8 @@ export async function getInsights(propertyId: string) {
   return {
     rooms: rooms.length,
     occupied: rooms.filter((r) => r.activeLeaseId).length,
+    // ส่งบิลดิบไปแยกรายได้ตามหมวดที่หน้าจอ กรองรอบบิลได้โดยไม่ต้องยิงเซิร์ฟเวอร์ใหม่
+    bills,
     recurring: recurringMonthly(leases),
     vacancy: vacancyLoss(rooms),
     collection: collectionRate(bills),
