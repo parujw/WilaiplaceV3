@@ -15,6 +15,12 @@ export interface FirebaseWebConfig {
   authDomain: string;
   projectId: string;
   storageBucket: string;
+  /**
+   * true = มีคนตั้ง NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ไว้เอง ให้ใช้ค่านั้นตรงๆ
+   * false = ฝั่ง client จะเปลี่ยนไปใช้โดเมนของเว็บนี้ผ่าน proxy /__/auth/*
+   *         เพื่อเลี่ยงการบล็อก third-party storage ของ Safari (ดู src/lib/auth-flow.ts)
+   */
+  authDomainPinned: boolean;
 }
 
 const apiKey = () => env("NEXT_PUBLIC_FIREBASE_API_KEY") ?? env("FIREBASE_API_KEY");
@@ -46,12 +52,14 @@ export function webConfig(): FirebaseWebConfig | null {
   const project = projectId();
   if (!key || !project) return null;
 
+  const pinned = env("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN");
   return {
     apiKey: key,
     // ค่าเริ่มต้นของ Firebase เสมอ ไม่ต้องตั้งเองถ้าไม่ได้ใช้โดเมนพิเศษ
-    authDomain: env("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN") ?? `${project}.firebaseapp.com`,
+    authDomain: pinned ?? `${project}.firebaseapp.com`,
     projectId: project,
     storageBucket: storageBucket() ?? `${project}.firebasestorage.app`,
+    authDomainPinned: Boolean(pinned),
   };
 }
 

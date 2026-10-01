@@ -1,10 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { IconGoogle } from "@/components/icons";
 import type { FirebaseWebConfig } from "@/lib/firebase-config";
-import { signInWithGoogle } from "@/lib/firebase-client";
+import {
+  finishGoogleRedirect,
+  shouldRedirectToSignIn,
+  signInWithGoogle,
+  startGoogleRedirect,
+} from "@/lib/firebase-client";
 
 /**
  * แปลรหัสข้อผิดพลาดของ Firebase เป็นสิ่งที่ต้องไปทำ
@@ -24,7 +29,32 @@ const AUTH_ERROR: Record<string, string> = {
   "auth/popup-blocked":
     "เบราว์เซอร์บล็อกหน้าต่างล็อกอิน อนุญาตป็อปอัปสำหรับเว็บนี้แล้วลองใหม่",
   "auth/network-request-failed": "เชื่อมต่อ Firebase ไม่ได้ ตรวจสัญญาณอินเทอร์เน็ตแล้วลองใหม่",
+  "wilai/timeout":
+    "รอหน้าต่างล็อกอินนานเกินไป กดปุ่มอีกครั้ง — รอบนี้ระบบจะพาไปหน้า Google ทั้งหน้าแทนการเปิดป็อปอัป",
+  "wilai/redirect-empty":
+    "กลับมาจากหน้า Google แล้วแต่ไม่ได้ข้อมูลล็อกอิน ถ้าเพิ่งกดยกเลิกไม่ต้องสนใจข้อความนี้ ถ้าไม่ได้กดยกเลิกให้ลองอีกครั้ง",
 };
+
+/**
+ * ป็อปอัปใช้ไม่ได้บนเครื่องนี้ — ครั้งต่อไปพาออกไปหน้า Google ทั้งหน้าเลย
+ * ไม่รวมกรณีผู้ใช้ปิดหน้าต่างเอง เพราะนั่นแปลว่าป็อปอัปทำงานได้ปกติ
+ */
+const POPUP_UNUSABLE = new Set([
+  "wilai/timeout",
+  "auth/popup-blocked",
+  "auth/web-storage-unsupported",
+  "auth/operation-not-supported-in-this-environment",
+]);
+
+/** กันปุ่มค้างตลอดไป ถ้า Firebase ไม่ตอบทั้งสำเร็จและล้มเหลว */
+const POPUP_TIMEOUT_MS = 25_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(Object.assign(new Error("หมดเวลา"), { code: "wilai/timeout" })), ms);
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
 
 /** ผู้ใช้ปิดหน้าต่างเอง ไม่ใช่ข้อผิดพลาด ไม่ต้องขึ้นกล่องแดง */
 const SILENT = new Set(["auth/popup-closed-by-user", "auth/cancelled-popup-request", "auth/user-cancelled"]);
@@ -49,7 +79,11 @@ function describe(err: unknown, config: FirebaseWebConfig | null): string | null
       }
     }
   }
-  if (!text) return message || "เข้าสู่ระบบไม่สำเร็จ";
+  if (!text) {
+    // ไม่รู้จักรหัสนี้ ให้โชว์ทั้งข้อความและรหัส เวลาส่งภาพหน้าจอมาจะบอกสาเหตุได้ทันที
+    const detail = [message, code && `(${code})`].filter(Boolean).join(" ");
+    return detail || "เข้าสู่ระบบไม่สำเร็จ";
+  }
 
   // ปัญหาเรื่องคีย์ ให้เทียบค่าได้เลยว่าที่เก็บไว้ตรงกับใน Console ไหม
   if (code.startsWith("auth/api-key-not-valid") && config) {
@@ -83,26 +117,99 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
+  /** ป็อปอัปเพิ่งค้างหรือถูกบล็อก รอบหน้าไม่ต้องลองอีก พาออกไปหน้า Google ทั้งหน้าเลย */
+  const [popupFailed, setPopupFailed] = useState(false);
+  const leaving = useRef(false);
 
   const ready = serverReady && webConfig !== null;
 
-  async function post(url: string, body?: unknown) {
+  const post = useCallback(async (url: string, body?: unknown) => {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "เข้าสู่ระบบไม่สำเร็จ");
-  }
+  }, []);
+
+  const enter = useCallback(
+    async (idToken: string) => {
+      await post("/api/auth/session", { idToken });
+      startTransition(() => router.replace("/select"));
+    },
+    [post, router, startTransition],
+  );
+
+  /*
+   * ถ้ารอบก่อนเลือกวิธี redirect เบราว์เซอร์จะออกจากหน้านี้ไปที่ Google
+   * แล้วกลับมาเปิดหน้านี้ใหม่ ผลการล็อกอินรออยู่ใน Firebase ต้องมารับตรงนี้
+   * ไม่รับ = ล็อกอินผ่านแล้วแต่หน้าเว็บไม่รู้เรื่อง ค้างอยู่หน้าล็อกอินเหมือนไม่เคยกด
+   */
+  useEffect(() => {
+    if (!ready) return;
+    const flag = "wilai.signin-redirect";
+    let returning = false;
+    try {
+      returning = sessionStorage.getItem(flag) === "1";
+      sessionStorage.removeItem(flag);
+    } catch {
+      // Safari โหมดส่วนตัวห้ามแตะ sessionStorage — ยังรับผลได้ แค่ไม่โชว์สถานะกำลังโหลด
+    }
+
+    let alive = true;
+    if (returning) setBusy(true);
+
+    finishGoogleRedirect(webConfig!)
+      .then(async (idToken) => {
+        if (!alive) return;
+        if (idToken) {
+          leaving.current = true;
+          await enter(idToken);
+          return;
+        }
+        // ไม่มีผลรออยู่ และเราก็ไม่ได้เพิ่งกลับมาจาก Google ถือว่าเข้าหน้านี้ปกติ
+        if (returning) setError(describe({ code: "wilai/redirect-empty" }, webConfig));
+      })
+      .catch((err) => {
+        if (alive && returning) setError(describe(err, webConfig));
+      })
+      .finally(() => {
+        if (alive && !leaving.current) setBusy(false);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [ready, webConfig, enter]);
 
   async function handleGoogle() {
     setError(null);
     setBusy(true);
+
+    if (popupFailed || shouldRedirectToSignIn()) {
+      // บอกตัวเองไว้ก่อนออกจากหน้า เพื่อให้รอบหน้ารู้ว่าต้องไปรับผลการล็อกอิน
+      try {
+        sessionStorage.setItem("wilai.signin-redirect", "1");
+      } catch {
+        // ไม่ได้ก็ไม่เป็นไร ยังรับผลได้ แค่ไม่รู้ว่าควรโชว์สถานะกำลังโหลด
+      }
+      try {
+        await startGoogleRedirect(webConfig!);
+        // ถึงตรงนี้แปลว่าเบราว์เซอร์ยังไม่ยอมเปลี่ยนหน้า ปล่อยให้ค้างไว้ดีกว่ารีเซ็ตแล้วกดซ้ำ
+        return;
+      } catch (err) {
+        setError(describe(err, webConfig));
+        setBusy(false);
+        return;
+      }
+    }
+
     try {
-      const idToken = await signInWithGoogle(webConfig!);
-      await post("/api/auth/session", { idToken });
-      startTransition(() => router.replace("/select"));
+      const idToken = await withTimeout(signInWithGoogle(webConfig!), POPUP_TIMEOUT_MS);
+      await enter(idToken);
     } catch (err) {
+      const code = (err as { code?: string })?.code ?? "";
+      if (POPUP_UNUSABLE.has(code)) setPopupFailed(true);
       setError(describe(err, webConfig));
     } finally {
       setBusy(false);
