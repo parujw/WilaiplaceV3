@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Avatar, Badge, PropertyImage } from "@/components/ui";
 import { IconBack, IconChevron, IconDoor, IconPin } from "@/components/icons";
 import { getSummary, listProperties } from "@/lib/repo";
-import { getSelectedPropertyId, getSessionUser } from "@/lib/session";
+import { getSelectedPropertyId, getSessionUser, isLoginRequired } from "@/lib/session";
 import { AddPropertyForm } from "@/components/AddPropertyForm";
 import { PropertyPicker, SignOutButton } from "./PropertyPicker";
 
@@ -102,9 +102,11 @@ export default async function SelectPropertyPage() {
         </div>
       ) : null}
 
-      <div className="mt-8 text-center">
-        <SignOutButton />
-      </div>
+      {isLoginRequired() ? (
+        <div className="mt-8 text-center">
+          <SignOutButton />
+        </div>
+      ) : null}
     </div>
   );
 }

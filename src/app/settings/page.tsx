@@ -8,7 +8,7 @@ import { isFirebaseConfigured, storeIsPersistent } from "@/lib/db";
 import { hasInvoiceSecret, invoicePrintPath } from "@/lib/invoice-link";
 import { isUsingDefaultPayment } from "@/lib/payment-default";
 import { listBills, migrationIssues } from "@/lib/repo";
-import { isAllowlistRequired } from "@/lib/session";
+import { isAllowlistRequired, isLoginRequired } from "@/lib/session";
 import { InvoiceSettings } from "@/components/InvoiceSettings";
 import { PropertyEditor } from "@/components/PropertyEditor";
 import { SignOutButton } from "./SettingsActions";
@@ -24,6 +24,7 @@ export default async function SettingsPage() {
   const persistent = storeIsPersistent();
   const invoiceSecretSet = hasInvoiceSecret();
   const allowlistOnly = isAllowlistRequired();
+  const loginOn = isLoginRequired();
   const latestBill = (await listBills(property.id)).find((b) => b.status !== "void") ?? null;
 
   return (
@@ -40,14 +41,16 @@ export default async function SettingsPage() {
           <Avatar name={user.name} photoUrl={user.photoUrl} size={54} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-[17px] font-bold tracking-tight">{user.name}</p>
-            <p className="truncate text-[13px] text-muted">{user.email}</p>
+            {user.email ? <p className="truncate text-[13px] text-muted">{user.email}</p> : null}
           </div>
           <Badge tone="accent">{ROLE_LABEL[user.role]}</Badge>
         </div>
         <p className="mt-2 px-1 text-[12px] leading-relaxed text-muted">
-          {allowlistOnly
-            ? "ตอนนี้จำกัดให้เข้าได้เฉพาะอีเมลที่อยู่ในรายชื่อ (LOGIN_ALLOWLIST_ONLY=1)"
-            : "ตอนนี้ใครล็อกอินด้วย Google ก็เข้าได้ในฐานะเจ้าของ — จำกัดเฉพาะบางคนได้โดยตั้ง LOGIN_ALLOWLIST_ONLY=1"}
+          {!loginOn
+            ? "ปิดล็อกอินอยู่ — ใครเปิดลิงก์นี้เจอก็ใช้งานได้ในฐานะเจ้าของ ทั้งดูข้อมูลผู้เช่าและแก้บิล เปิดล็อกอินกลับมาได้โดยตั้ง REQUIRE_LOGIN=1 ใน Vercel"
+            : allowlistOnly
+              ? "ตอนนี้จำกัดให้เข้าได้เฉพาะอีเมลที่อยู่ในรายชื่อ (LOGIN_ALLOWLIST_ONLY=1)"
+              : "ตอนนี้ใครล็อกอินด้วย Google ก็เข้าได้ในฐานะเจ้าของ — จำกัดเฉพาะบางคนได้โดยตั้ง LOGIN_ALLOWLIST_ONLY=1"}
         </p>
       </section>
 
@@ -169,9 +172,11 @@ export default async function SettingsPage() {
         </section>
       ) : null}
 
-      <section className="px-4 pt-6">
-        <SignOutButton />
-      </section>
+      {loginOn ? (
+        <section className="px-4 pt-6">
+          <SignOutButton />
+        </section>
+      ) : null}
 
       <p className="px-4 pt-6 text-center text-[12px] text-muted">
         Wilai Communities · V3

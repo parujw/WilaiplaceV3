@@ -2,12 +2,15 @@ import { redirect } from "next/navigation";
 import { PropertyImage } from "@/components/ui";
 import { isFirebaseConfigured } from "@/lib/firebase-admin";
 import { missingFirebaseEnv, webConfig } from "@/lib/firebase-config";
-import { getSessionUser, isDemoLoginAllowed } from "@/lib/session";
+import { getSessionUser, isDemoLoginAllowed, isLoginRequired } from "@/lib/session";
 import { LoginForm } from "./LoginForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
+  // ปิดล็อกอินอยู่ หน้านี้จึงไม่มีความหมาย ส่งต่อไปใช้งานเลย
+  // ไม่ลบไฟล์ทิ้งเพราะถ้าตั้ง REQUIRE_LOGIN=1 ต้องกลับมาใช้ได้ทันที
+  if (!isLoginRequired()) redirect("/select");
   if (await getSessionUser()) redirect("/select");
 
   return (

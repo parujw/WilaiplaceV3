@@ -24,6 +24,33 @@ export function isDemoLoginAllowed(): boolean {
   return process.env.NODE_ENV !== "production";
 }
 
+/**
+ * ต้องล็อกอินก่อนใช้งานไหม
+ *
+ * ปิดไว้ตามที่เจ้าของสั่ง — เปิดเว็บแล้วใช้ได้เลย ไม่มีหน้าล็อกอิน
+ * แลกกับว่าใครเปิด URL นี้เจอ ก็เห็นชื่อ เบอร์ ค่าเช่าของผู้เช่าทุกห้อง
+ * และแก้บิลหรือส่งไลน์ได้เหมือนเจ้าของ
+ *
+ * เอาล็อกอินกลับมาเมื่อไหร่ ตั้ง REQUIRE_LOGIN=1 ใน Vercel แล้ว Redeploy
+ * โค้ดล็อกอิน Google เดิมยังอยู่ครบ ไม่ต้องเขียนใหม่
+ */
+export function isLoginRequired(): boolean {
+  return env("REQUIRE_LOGIN") === "1";
+}
+
+/** ตัวตนที่ใช้เมื่อไม่ต้องล็อกอิน — สิทธิ์เจ้าของ เข้าได้ทุกอาคาร */
+function openUser(): SessionUser {
+  return {
+    uid: "open",
+    email: "",
+    name: "ผู้ดูแล",
+    photoUrl: null,
+    role: "owner",
+    propertyIds: [],
+    demo: false,
+  };
+}
+
 function secret(): string {
   return env("AUTH_SECRET") ?? "wilai-communities-dev-secret";
 }
@@ -85,6 +112,10 @@ async function allowlistFor(email: string): Promise<AllowlistEntry | null> {
 }
 
 export async function getSessionUser(): Promise<SessionUser | null> {
+  // ไม่ต้องล็อกอิน = ทุกคนที่เปิดเว็บเป็นเจ้าของ ไม่ต้องแตะคุกกี้เลย
+  // ตรวจที่นี่ที่เดียว หน้าจอและ API ทุกเส้นเรียกผ่านฟังก์ชันนี้อยู่แล้ว
+  if (!isLoginRequired()) return openUser();
+
   const jar = await cookies();
 
   // คุกกี้สาธิตใช้ได้เฉพาะตอนที่เปิดโหมดสาธิตอยู่
