@@ -1,0 +1,484 @@
+/*
+ * ใบจดมิเตอร์สำหรับแจกผู้เช่า — A4 แผ่นละ 3 ใบ ตัดตามเส้นประ
+ *
+ * ความสูงของใบตั้งเป็น mm คงที่ ไม่ปล่อยให้ไหลตามเนื้อหา
+ * เพราะชื่อผู้เช่ายาวไม่เท่ากัน ถ้าใบสูงไม่เท่ากันเส้นตัดจะไม่ตรงกันทุกแผ่น
+ * แล้วต้องตัดใบต่อใบแทนที่จะวางซ้อนกันตัดทีเดียวทั้งปึก
+ *
+ * 2 ใบ × 130mm = 260mm ยังน้อยกว่าเนื้อที่ A4 ที่เหลือหลังหัก @page margin
+ * (297 - 20 = 277mm) จึงไม่มีทางล้นไปแผ่นที่สาม
+ */
+
+:root {
+  --ink: #1f2937;
+  --ink-soft: #374151;
+  --muted: #6b7280;
+  --faint: #9ca3af;
+  --brand: #dc8f2a;
+  --line: #d1d5db;
+  --box: #fafafa;
+}
+
+@page {
+  size: A4;
+  margin: 10mm;
+}
+
+.slips {
+  box-sizing: border-box;
+  width: 190mm;
+  margin: 0 auto;
+  color: var(--ink);
+  font-size: 9pt;
+  line-height: 1.4;
+}
+
+/* หนึ่ง .page = หนึ่งแผ่นกระดาษ แผ่นสุดท้ายไม่ต้องขึ้นหน้าใหม่ซ้ำ */
+.page {
+  break-after: page;
+}
+
+.page:last-child {
+  break-after: auto;
+}
+
+/* ------------------------------- ใบแต่ละใบ ------------------------------- */
+
+.slip {
+  box-sizing: border-box;
+  height: 130mm;
+  padding: 6mm 6mm 0;
+  /* เส้นประคือรอยตัด ใบล่างสุดของแผ่นไม่ต้องมีเส้นต่อ */
+  border-bottom: 1px dashed var(--line);
+  break-inside: avoid;
+  /*
+   * ชื่ออาคารหรือชื่อผู้เช่าที่ยาวผิดปกติต้องถูกตัด ไม่ใช่ดันเนื้อหาทะลุลงใบถัดไป
+   * ล้นแล้วถูกตัดยังอ่านรู้เรื่อง แต่ล้นแล้วไปทับใบล่างคือกระดาษเสียทั้งแผ่น
+   */
+  overflow: hidden;
+}
+
+.slip:last-child {
+  border-bottom: 0;
+}
+
+.slip-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8mm;
+  border-bottom: 1.5pt solid var(--brand);
+  padding-bottom: 2mm;
+}
+
+.title {
+  margin: 0;
+  color: var(--brand);
+  font-size: 13pt;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.org {
+  margin: 1mm 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 8.5pt;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cycle {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.cycle-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 8pt;
+}
+
+.cycle-value {
+  margin: 0;
+  font-size: 11pt;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ------------------------------ ห้องและผู้เช่า ----------------------------- */
+
+.who {
+  display: flex;
+  align-items: baseline;
+  gap: 5mm;
+  padding: 2.5mm 0 2mm;
+}
+
+/* ห้องต้องเด่นที่สุดบนใบ คนแจกต้องกวาดตาหาเลขห้องได้จากปึกกระดาษ */
+.room {
+  margin: 0;
+  font-size: 15pt;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tenant {
+  margin: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 11pt;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.due {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 9pt;
+}
+
+.due strong {
+  white-space: nowrap;
+}
+
+/* -------------------------------- ตารางเลข -------------------------------- */
+
+.reads {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+/*
+ * หัวตารางสูงคงที่ ไม่ว่าข้อความจะพอดีบรรทัดเดียวหรือตกไปสองบรรทัด
+ *
+ * ปล่อยให้สูงตามเนื้อหาแล้วใบที่มีวันที่อ่านครั้งก่อนต่อท้ายจะสูงกว่าใบที่ไม่มี
+ * เนื้อหาข้างล่างถูกดันลงไปทะลุขอบใบ กล่องไลน์กับ QR โดนตัดหาย
+ * ซึ่งไม่เห็นบนจอ เห็นตอนพิมพ์ออกมาแล้วเท่านั้น
+ */
+.reads th {
+  height: 9mm;
+  border-bottom: 0.75pt solid var(--line);
+  padding: 0 2mm 1mm;
+  color: var(--muted);
+  font-size: 7.5pt;
+  font-weight: 600;
+  text-align: left;
+  vertical-align: bottom;
+}
+
+.reads td {
+  padding: 1.5mm 2mm;
+  vertical-align: middle;
+}
+
+/*
+ * ความกว้างคุมที่คลาส แต่ขนาดตัวอักษรคุมที่ td เท่านั้น
+ * เขียนรวมกันแล้ว .reads .prev จะชนะ .reads th ด้วยความจำเพาะที่สูงกว่า
+ * หัวตารางเลยกลายเป็นตัวหนา 13pt ตามช่องตัวเลข แล้วตกบรรทัดจนใบเสียทรง
+ */
+.reads .what {
+  width: 24mm;
+}
+
+.reads td.what {
+  font-size: 10.5pt;
+  font-weight: 700;
+}
+
+.reads .unit {
+  color: var(--muted);
+  font-size: 8pt;
+  font-weight: 400;
+}
+
+.reads .prev {
+  width: 34mm;
+}
+
+/* เลขครั้งก่อนพิมพ์มาแล้ว ให้ตัวโตพอให้เทียบกับหน้าปัดได้ถนัด */
+.reads td.prev {
+  font-size: 13pt;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ช่องแก้เลขเดิม — ใช้นานๆ ครั้ง จึงทำให้จางกว่าช่องหลัก จะได้ไม่เผลอเขียนผิดช่อง */
+.reads .fix {
+  width: 36mm;
+}
+
+.reads .when {
+  color: var(--faint);
+  font-size: 7.5pt;
+  font-weight: 400;
+}
+
+.reads .now {
+  padding-left: 0;
+}
+
+/* ช่องเขียน — สูงพอเขียนด้วยปากกาลูกลื่นได้สบาย ไม่ต้องเขียนตัวจิ๋ว */
+.box {
+  display: block;
+  height: 12mm;
+  border: 0.75pt solid var(--ink-soft);
+  border-radius: 1mm;
+  background: var(--box);
+}
+
+.box.soft {
+  border-color: var(--line);
+  border-style: dashed;
+  background: transparent;
+}
+
+.hint {
+  margin: 1.5mm 0 0;
+  color: var(--muted);
+  font-size: 7.5pt;
+  line-height: 1.3;
+}
+
+/* ------------------------- วันที่ ผู้จด และหมายเหตุ ------------------------- */
+
+.fill {
+  display: flex;
+  align-items: baseline;
+  gap: 5mm;
+  padding-top: 3mm;
+  font-size: 9pt;
+}
+
+.field {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 1.5mm;
+  white-space: nowrap;
+}
+
+.rule {
+  display: inline-block;
+  flex: 1;
+  min-width: 18mm;
+  border-bottom: 0.75pt solid var(--line);
+  /* เส้นต้องอยู่ต่ำกว่า baseline เล็กน้อย ไม่ใช่ขีดทับตัวอักษร */
+  transform: translateY(-0.5mm);
+}
+
+.rule.short {
+  flex: 0 0 22mm;
+  min-width: 22mm;
+}
+
+/* ------------------------------- ลงชื่อกลับมา ------------------------------ */
+
+.sign-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6mm;
+  padding-top: 3mm;
+}
+
+/*
+ * ช่องเซ็นต้องสูงกว่าช่องเขียนธรรมดา ลายเซ็นกินที่แนวตั้งมากกว่าตัวหนังสือ
+ * บีบให้เตี้ยแล้วลายเซ็นจะล้นออกนอกเส้นจนดูเหมือนขีดเขียนเลอะ
+ */
+.sign {
+  display: flex;
+  flex: 1;
+  max-width: 85mm;
+  flex-direction: column;
+}
+
+.sign-line {
+  height: 9mm;
+  border-bottom: 0.75pt solid var(--ink-soft);
+}
+
+.sign-label {
+  padding-top: 1mm;
+  color: var(--muted);
+  font-size: 8pt;
+}
+
+.check {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 1.5mm;
+  padding-bottom: 1mm;
+  color: var(--ink-soft);
+  font-size: 9pt;
+  white-space: nowrap;
+}
+
+.tick {
+  display: inline-block;
+  width: 3.5mm;
+  height: 3.5mm;
+  border: 0.75pt solid var(--ink-soft);
+  border-radius: 0.5mm;
+}
+
+/* ------------------------------ ส่งกลับทางไลน์ ----------------------------- */
+
+.send {
+  display: flex;
+  align-items: center;
+  gap: 4mm;
+  margin-top: 4mm;
+  border: 0.75pt solid #bbf7d0;
+  border-radius: 1.5mm;
+  background: #f0fdf4;
+  padding: 2.5mm 3mm;
+}
+
+/*
+ * QR 20mm สแกนติดสบายด้วยกล้องมือถือทั่วไป
+ * ไฟล์ต้นทาง 396px ที่ 20mm = ราว 500 dpi จึงยังคมแม้เครื่องพิมพ์ย่อขนาด
+ */
+.qr {
+  width: 20mm;
+  height: 20mm;
+  flex-shrink: 0;
+}
+
+.send-body {
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 8pt;
+  line-height: 1.35;
+}
+
+.send-body p {
+  margin: 0;
+}
+
+.send-title {
+  color: #15803d;
+  font-size: 9.5pt;
+  font-weight: 800;
+}
+
+/* ไอดีไลน์ต้องอ่านทีละตัวอักษรได้ชัด คนจะพิมพ์ตามเวลาสแกนไม่ติด */
+.line-id {
+  font-size: 9.5pt;
+  letter-spacing: 0.2pt;
+  white-space: nowrap;
+}
+
+/* --------------------------------- ไม่มีใบ -------------------------------- */
+
+.empty {
+  margin: 20mm auto;
+  max-width: 120mm;
+  text-align: center;
+}
+
+.empty-title {
+  margin: 0 0 2mm;
+  font-size: 13pt;
+  font-weight: 700;
+}
+
+.empty-link {
+  display: inline-block;
+  margin-top: 5mm;
+  color: var(--brand);
+  font-weight: 700;
+}
+
+/* -------------------------------- ปุ่มลอย -------------------------------- */
+
+.print-bar {
+  position: fixed;
+  top: 12pt;
+  right: 12pt;
+  left: 12pt;
+  display: flex;
+  justify-content: space-between;
+  gap: 8pt;
+  z-index: 10;
+}
+
+.print-bar .back {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999pt;
+  background: #fff;
+  padding: 9pt 18pt;
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4pt 14pt -6pt rgb(0 0 0 / 0.5);
+}
+
+.print-bar button {
+  border: 0;
+  border-radius: 999pt;
+  background: var(--brand);
+  padding: 9pt 20pt;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4pt 14pt -6pt rgb(0 0 0 / 0.5);
+}
+
+/* ------------------------------ ดูบนจอ (ไม่พิมพ์) ----------------------------- */
+
+@media screen {
+  body {
+    background: #e4e0da;
+    padding: 56pt 0 16pt;
+  }
+
+  .page {
+    margin: 0 auto 16px;
+    box-sizing: border-box;
+    width: 210mm;
+    background: #fff;
+    padding: 10mm;
+    box-shadow: 0 10px 40px -12px rgb(0 0 0 / 0.35);
+  }
+
+  .empty {
+    background: #fff;
+    border-radius: 4mm;
+    padding: 12mm 8mm;
+  }
+}
+
+/* --------------------------------- พิมพ์จริง -------------------------------- */
+
+@media print {
+  .print-bar {
+    display: none;
+  }
+
+  /* ขอบและพื้นมาจาก @page แล้ว แผ่นจึงไม่ต้องเว้นเองซ้ำอีก */
+  .page {
+    width: auto;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  /* กรอบช่องเขียน แถบไลน์ และ QR ต้องติดไปกับกระดาษ ไม่ใช่ถูกตัดทิ้งเพื่อประหยัดหมึก */
+  .slip,
+  .box,
+  .send,
+  .qr,
+  .tick,
+  .sign-line,
+  .slip-head {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

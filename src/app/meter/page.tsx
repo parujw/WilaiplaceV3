@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { IconBack } from "@/components/icons";
+import { IconBack, IconChevron } from "@/components/icons";
 import { lastReadingFor } from "@/lib/billing";
 import { cycleLabel } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
@@ -95,6 +95,24 @@ export default async function MeterPage({
           </Link>
         ))}
       </div>
+
+      {rows.length > 0 ? (
+        <div className="px-4 pb-4">
+          {/* เดินเก็บเลขมิเตอร์ 17 ห้องเองทุกเดือนคือเวลาที่เสียไปเปล่าๆ แจกใบให้ผู้เช่าจดเองได้ */}
+          <Link
+            href={`/meter/slips?cycle=${cycle}`}
+            className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3.5 shadow-[0_1px_2px_rgb(23_23_27/0.06)] transition active:scale-[0.99]"
+          >
+            <span className="min-w-0">
+              <span className="block text-[14px] font-bold">พิมพ์ใบให้ผู้เช่าจดมิเตอร์เอง</span>
+              <span className="block text-[12px] text-muted">
+                A4 แผ่นละ 3 ใบ · มีเลขครั้งก่อนพิมพ์มาให้ · {rows.length} ห้อง
+              </span>
+            </span>
+            <IconChevron className="h-5 w-5 shrink-0 text-muted" />
+          </Link>
+        </div>
+      ) : null}
 
       <div className="px-4">
         {rows.length === 0 ? (
