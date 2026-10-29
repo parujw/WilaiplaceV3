@@ -97,8 +97,15 @@ export default async function SelectPropertyPage() {
       </div>
 
       {user.role === "owner" ? (
-        <div className="mt-4">
+        <div className="mt-4 space-y-2">
           <AddPropertyForm />
+          {/* อาคารที่มีผู้เช่าอยู่แล้ว กรอกทีละห้องในแอปเสียเวลา กรอกใน Excel แล้วนำเข้าทีเดียว */}
+          <Link
+            href="/settings/import"
+            className="block rounded-2xl py-3 text-center text-[13px] font-semibold text-muted underline underline-offset-4"
+          >
+            มีข้อมูลห้องและผู้เช่าอยู่แล้ว? นำเข้าจาก Excel
+          </Link>
         </div>
       ) : null}
 

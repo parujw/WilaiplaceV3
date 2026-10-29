@@ -1,7 +1,7 @@
 import { ApiError, handle, readJson, requireEditor, requireSameProperty } from "@/lib/api";
 import { db } from "@/lib/db";
 import { buildLease, nextCode, type MoveInInput } from "@/lib/lease-ops";
-import { audit, getProperty, getRoom, getTenant, listTenants } from "@/lib/repo";
+import { audit, getProperty, getRoom, getTenant } from "@/lib/repo";
 import type { WriteOp } from "@/lib/db/store";
 import type { Tenant } from "@/lib/types";
 
@@ -60,7 +60,9 @@ export async function POST(request: Request) {
       const name = body.tenant?.name?.trim();
       if (!name) throw new ApiError("ต้องระบุชื่อผู้เช่า");
 
-      const existing = await listTenants(propertyId);
+      // รหัสผู้เช่าใช้ร่วมกันทุกอาคาร ต่อเลขจากของทุกอาคาร
+      // นับเฉพาะอาคารนี้แล้วอาคารใหม่จะได้ T0001 ไปเขียนทับผู้เช่าคนแรกของอาคารแรก
+      const existing = await db().list<{ id: string }>("tenants");
       tenant = {
         id: nextCode(existing.map((t) => t.id), "T"),
         propertyId,
