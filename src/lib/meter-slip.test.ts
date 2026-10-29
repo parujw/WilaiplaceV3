@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { chunk, slipDueDate, SLIPS_PER_PAGE } from "./meter-slip";
+import {
+  BLANK_PAGES_DEFAULT,
+  BLANK_PAGES_MAX,
+  blankPageCount,
+  chunk,
+  cycleFromMonthInput,
+  slipDueDate,
+  SLIPS_PER_PAGE,
+} from "./meter-slip";
 
 describe("slipDueDate", () => {
   it("คืนวันที่ตามรอบบิล", () => {
@@ -55,5 +63,38 @@ describe("chunk", () => {
     expect(chunk([1, 2], 0)).toEqual([[1, 2]]);
     expect(chunk([1, 2], -3)).toEqual([[1, 2]]);
     expect(chunk([], 0)).toEqual([]);
+  });
+});
+
+describe("blankPageCount", () => {
+  it("อ่านจำนวนแผ่นที่ขอมา", () => {
+    expect(blankPageCount("5")).toBe(5);
+  });
+
+  it("ไม่ได้ระบุหรืออ่านไม่ออก ใช้ค่าเริ่มต้น", () => {
+    expect(blankPageCount(undefined)).toBe(BLANK_PAGES_DEFAULT);
+    expect(blankPageCount("")).toBe(BLANK_PAGES_DEFAULT);
+    expect(blankPageCount("abc")).toBe(BLANK_PAGES_DEFAULT);
+    expect(blankPageCount("-2")).toBe(BLANK_PAGES_DEFAULT);
+    expect(blankPageCount("0")).toBe(BLANK_PAGES_DEFAULT);
+  });
+
+  it("พิมพ์ผิดหลักไม่ทำให้ได้กระดาษเป็นร้อยแผ่น", () => {
+    expect(blankPageCount("200")).toBe(BLANK_PAGES_MAX);
+    expect(blankPageCount("99999")).toBe(BLANK_PAGES_DEFAULT);
+  });
+});
+
+describe("cycleFromMonthInput", () => {
+  it("แปลงค่าจากช่องเลือกเดือนเป็นรอบบิล", () => {
+    expect(cycleFromMonthInput("2026-10")).toBe("202610");
+  });
+
+  it("ว่างหรือใช้ไม่ได้ คืน null ให้ผู้เช่าเขียนเดือนเอง", () => {
+    expect(cycleFromMonthInput(undefined)).toBeNull();
+    expect(cycleFromMonthInput("")).toBeNull();
+    expect(cycleFromMonthInput("2026-13")).toBeNull();
+    expect(cycleFromMonthInput("2026-00")).toBeNull();
+    expect(cycleFromMonthInput("202610")).toBeNull();
   });
 });
