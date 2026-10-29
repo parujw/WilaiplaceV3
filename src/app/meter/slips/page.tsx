@@ -1,21 +1,15 @@
 import Link from "next/link";
-import { Sarabun } from "next/font/google";
 import { lastReadingFor } from "@/lib/billing";
 import { cycleLabel, thaiDate } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
-import { LINE_CONTACT } from "@/lib/line-contact";
 import { chunk, slipDueDate, SLIPS_PER_PAGE } from "@/lib/meter-slip";
 import { currentCycle, getRoomViews, listMeterReadings } from "@/lib/repo";
+import { sarabun } from "./font";
 import { PrintBar } from "./PrintBar";
+import { SendToLine } from "./SendToLine";
 import "./slips.css";
 
 export const dynamic = "force-dynamic";
-
-const sarabun = Sarabun({
-  subsets: ["thai", "latin"],
-  weight: ["400", "600", "700", "800"],
-  display: "swap",
-});
 
 /** วันที่ขอให้ส่งคืนตามค่าเริ่มต้น — ออกบิลสัปดาห์สุดท้ายของเดือน จึงต้องได้เลขก่อนนั้น */
 const DEFAULT_DUE_DAY = 25;
@@ -41,7 +35,7 @@ function previousText(value: number | null): string {
 }
 
 /**
- * ใบจดมิเตอร์สำหรับแจกผู้เช่า — พิมพ์ลง A4 แผ่นละ 3 ใบ แล้วตัดตามเส้น
+ * ใบจดมิเตอร์สำหรับแจกผู้เช่า — พิมพ์ลง A4 แผ่นละ 2 ใบ แล้วตัดตามเส้น
  *
  * เลขครั้งก่อนพิมพ์มาให้แล้ว ผู้เช่าเขียนแค่เลขครั้งนี้ จึงเทียบได้ทันทีว่าเลขเดินถูกทาง
  * ไม่ให้กรอกจำนวนหน่วยเอง เพราะคิดเลขผิดแล้วจะกลายเป็นเรื่องเถียงกันตอนออกบิล
@@ -190,20 +184,7 @@ export default async function MeterSlipsPage({
                   </span>
                 </div>
 
-                <div className="send">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={LINE_CONTACT.qrPath} alt={`QR เพิ่มเพื่อนไลน์ ${LINE_CONTACT.id}`} className="qr" />
-                  <div className="send-body">
-                    <p className="send-title">ส่งกลับทางไลน์</p>
-                    <p>
-                      สแกน QR นี้ หรือค้นหาไอดี <strong className="line-id">{LINE_CONTACT.id}</strong> ในไลน์ แล้วกดเพิ่มเพื่อน
-                    </p>
-                    <p>
-                      แล้วถ่ายรูปใบนี้ <strong>พร้อมรูปหน้าปัดมิเตอร์</strong> ส่งมาในแชท —
-                      เขียนตัวเลขให้ครบทุกหลักตามที่เห็นบนหน้าปัด ถ้าเลขไม่ชัดเจ้าหน้าที่จะดูจากรูปให้
-                    </p>
-                  </div>
-                </div>
+                <SendToLine />
               </article>
             ))}
           </section>

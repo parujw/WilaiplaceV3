@@ -96,9 +96,9 @@ export default async function MeterPage({
         ))}
       </div>
 
-      {rows.length > 0 ? (
-        <div className="px-4 pb-4">
-          {/* เดินเก็บเลขมิเตอร์ 17 ห้องเองทุกเดือนคือเวลาที่เสียไปเปล่าๆ แจกใบให้ผู้เช่าจดเองได้ */}
+      <div className="space-y-2 px-4 pb-4">
+        {rows.length > 0 ? (
+          // เดินเก็บเลขมิเตอร์ 17 ห้องเองทุกเดือนคือเวลาที่เสียไปเปล่าๆ แจกใบให้ผู้เช่าจดเองได้
           <Link
             href={`/meter/slips?cycle=${cycle}`}
             className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3.5 shadow-[0_1px_2px_rgb(23_23_27/0.06)] transition active:scale-[0.99]"
@@ -106,13 +106,26 @@ export default async function MeterPage({
             <span className="min-w-0">
               <span className="block text-[14px] font-bold">พิมพ์ใบให้ผู้เช่าจดมิเตอร์เอง</span>
               <span className="block text-[12px] text-muted">
-                A4 แผ่นละ 3 ใบ · มีเลขครั้งก่อนพิมพ์มาให้ · {rows.length} ห้อง
+                A4 แผ่นละ 2 ใบ · มีเลขครั้งก่อนพิมพ์มาให้ · {rows.length} ห้อง
               </span>
             </span>
             <IconChevron className="h-5 w-5 shrink-0 text-muted" />
           </Link>
-        </div>
-      ) : null}
+        ) : null}
+        {/* อาคารอื่นที่ยังไม่ได้อยู่ในระบบ ไม่ต้องมีห้องหรือผู้เช่าก็พิมพ์ได้ */}
+        <Link
+          href="/meter/slips/blank"
+          className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3.5 shadow-[0_1px_2px_rgb(23_23_27/0.06)] transition active:scale-[0.99]"
+        >
+          <span className="min-w-0">
+            <span className="block text-[14px] font-bold">พิมพ์ใบจดมิเตอร์เปล่า (อาคารอื่น)</span>
+            <span className="block text-[12px] text-muted">
+              ให้ผู้เช่ากรอกห้องและชื่อเอง · มี QR ไลน์ส่งกลับเหมือนกัน
+            </span>
+          </span>
+          <IconChevron className="h-5 w-5 shrink-0 text-muted" />
+        </Link>
+      </div>
 
       <div className="px-4">
         {rows.length === 0 ? (

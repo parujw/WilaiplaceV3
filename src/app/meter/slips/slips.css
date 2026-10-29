@@ -1,5 +1,6 @@
 /*
- * ใบจดมิเตอร์สำหรับแจกผู้เช่า — A4 แผ่นละ 3 ใบ ตัดตามเส้นประ
+ * ใบจดมิเตอร์สำหรับแจกผู้เช่า — A4 แผ่นละ 2 ใบ ตัดตามเส้นประ
+ * ใช้ร่วมกันทั้งใบที่มีชื่อผู้เช่า (/meter/slips) และใบเปล่า (/meter/slips/blank)
  *
  * ความสูงของใบตั้งเป็น mm คงที่ ไม่ปล่อยให้ไหลตามเนื้อหา
  * เพราะชื่อผู้เช่ายาวไม่เท่ากัน ถ้าใบสูงไม่เท่ากันเส้นตัดจะไม่ตรงกันทุกแผ่น
@@ -373,6 +374,122 @@
   white-space: nowrap;
 }
 
+/* ------------------------- ใบเปล่าสำหรับอาคารอื่น ------------------------- */
+
+/* หัวใบต้องหดได้ ไม่งั้นเส้นให้เขียนชื่ออาคารจะดันรอบเดือนตกขอบขวา */
+.head-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.org.blank-line {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5mm;
+  margin-top: 2mm;
+  color: var(--ink-soft);
+  font-size: 9pt;
+}
+
+.org-phone {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.cycle-rule {
+  display: inline-block;
+  width: 32mm;
+  height: 5mm;
+}
+
+/* เลขห้องต้องมีที่เขียนพอ แต่ไม่ต้องกว้างเท่าชื่อ */
+.blank-who {
+  padding-top: 3.5mm;
+  font-size: 10.5pt;
+  font-weight: 600;
+}
+
+.blank-who .room-field {
+  flex: 0 0 42mm;
+}
+
+.blank-who .room {
+  font-size: 13pt;
+}
+
+/* ไม่มีเลขพิมพ์มาให้ ช่องครั้งก่อนจึงต้องเป็นกล่องให้เขียน กว้างพอเท่ากับเลขหลายหลัก */
+.reads .prev-box {
+  width: 52mm;
+}
+
+.blank-reads .prev-box {
+  padding-right: 3mm;
+}
+
+/* ฟอร์มตั้งค่าใบเปล่า — อยู่บนจออย่างเดียว ซ่อนตอนพิมพ์ */
+.blank-setup {
+  box-sizing: border-box;
+  width: 210mm;
+  max-width: calc(100vw - 32px);
+  margin: 0 auto 16px;
+  border-radius: 3mm;
+  background: #fff;
+  padding: 14px 16px;
+  font-size: 10.5pt;
+  box-shadow: 0 10px 40px -12px rgb(0 0 0 / 0.35);
+}
+
+.blank-setup-title {
+  margin: 0;
+  font-size: 12pt;
+  font-weight: 800;
+}
+
+.blank-setup-note {
+  margin: 2px 0 10px;
+  color: var(--muted);
+  font-size: 9pt;
+}
+
+.blank-setup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.blank-setup label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--ink-soft);
+  font-size: 9pt;
+  font-weight: 600;
+}
+
+.blank-setup input {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11pt;
+  font-weight: 400;
+}
+
+.blank-setup button {
+  margin-top: 12px;
+  border: 0;
+  border-radius: 999pt;
+  background: var(--ink);
+  padding: 8px 18px;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 /* --------------------------------- ไม่มีใบ -------------------------------- */
 
 .empty {
@@ -458,7 +575,8 @@
 /* --------------------------------- พิมพ์จริง -------------------------------- */
 
 @media print {
-  .print-bar {
+  .print-bar,
+  .blank-setup {
     display: none;
   }
 

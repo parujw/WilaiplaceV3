@@ -52,3 +52,30 @@ export function chunk<T>(items: T[], size: number): T[][] {
   for (let i = 0; i < items.length; i += size) pages.push(items.slice(i, i + size));
   return pages;
 }
+
+/**
+ * ใบเปล่าสำหรับอาคารอื่นที่ยังไม่ได้อยู่ในระบบ — สั่งพิมพ์เป็นจำนวนแผ่น
+ * เพดานกันพิมพ์ผิดหลักแล้วเครื่องพิมพ์ปล่อยกระดาษเป็นร้อยแผ่น
+ */
+export const BLANK_PAGES_DEFAULT = 1;
+export const BLANK_PAGES_MAX = 20;
+
+/** จำนวนแผ่นที่ขอมาทาง URL — อ่านไม่ออกใช้ค่าเริ่มต้น เกินเพดานก็ตัดเหลือเพดาน */
+export function blankPageCount(param: string | undefined): number {
+  if (!/^\d{1,3}$/.test(param ?? "")) return BLANK_PAGES_DEFAULT;
+  const pages = Number(param);
+  if (pages < 1) return BLANK_PAGES_DEFAULT;
+  return Math.min(pages, BLANK_PAGES_MAX);
+}
+
+/**
+ * "2026-10" จากช่องเลือกเดือนของเบราว์เซอร์ → "202610" แบบรอบบิล
+ * ว่างหรือใช้ไม่ได้คืน null = ให้ผู้เช่าเขียนเดือนเอง
+ */
+export function cycleFromMonthInput(value: string | undefined): string | null {
+  const match = /^(\d{4})-(\d{2})$/.exec(value ?? "");
+  if (!match) return null;
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  return `${match[1]}${match[2]}`;
+}
