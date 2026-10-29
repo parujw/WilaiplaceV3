@@ -162,6 +162,13 @@ export default async function SettingsPage() {
       {user.role === "owner" ? (
         <section className="px-4 pt-6">
           <SectionHeader title="ข้อมูล" />
+          <Link href="/settings/import" className="card mb-2 flex items-center justify-between gap-3 p-4 active:bg-surface-2">
+            <div className="min-w-0">
+              <p className="text-[15px] font-bold">นำเข้าอาคารใหม่จาก Excel</p>
+              <p className="mt-0.5 text-[13px] text-muted">ดาวน์โหลด template กรอกห้องและผู้เช่า แล้วอัปโหลดกลับ</p>
+            </div>
+            <IconChevron className="h-5 w-5 shrink-0 text-muted" />
+          </Link>
           <Link href="/settings/migrate" className="card flex items-center justify-between gap-3 p-4 active:bg-surface-2">
             <div className="min-w-0">
               <p className="text-[15px] font-bold">ย้ายข้อมูลจาก V2</p>

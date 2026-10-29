@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildBill, dueDateFor, hasRentBill, lastReadingFor } from "@/lib/billing";
 import { db } from "@/lib/db";
+import { meterReadingId } from "@/lib/ids";
 import { audit, getRoomViews, listBills, listLeases, listMeterReadings, nextBillNo } from "@/lib/repo";
 import { carryOverFor, tenancyLeaseIds } from "@/lib/tenancy";
 import { getSelectedPropertyId, getSessionUser } from "@/lib/session";
@@ -138,7 +139,7 @@ export async function POST(request: Request) {
     };
 
     const reading: MeterReading = {
-      id: `MR-${cycle}-${room.roomNo}`,
+      id: meterReadingId(propertyId, cycle, room.roomNo),
       propertyId,
       roomId: room.id,
       cycle,
