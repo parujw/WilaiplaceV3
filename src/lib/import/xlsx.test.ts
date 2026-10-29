@@ -68,3 +68,56 @@ describe("template ไม่มีโน้ตบนช่อง", () => {
     expect(zip).not.toMatch(/comments\d*\.xml/);
   });
 });
+
+describe("dropdown ในช่องที่ต้องเหมือนกันทุกอาคาร", () => {
+  it("ประเภท สภาพห้อง วันครบกำหนด และเดือนเริ่มออกบิล เป็นรายการให้เลือก ตัวเลขห้ามติดลบ", async () => {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load((await buildTemplate(new Date(Date.UTC(2026, 9, 29)))) as unknown as ExcelJS.Buffer);
+
+    const rooms = wb.getWorksheet(SHEET_ROOMS)!;
+    const cellOf = (key: string, row: number) => rooms.getRow(row).getCell(ROOM_COLUMNS.findIndex((c) => c.key === key) + 1);
+    expect(cellOf("type", 2).dataValidation).toMatchObject({ type: "list", formulae: ['"รายเดือน,พาณิชย์"'] });
+    expect(cellOf("condition", 201).dataValidation).toMatchObject({
+      type: "list",
+      formulae: ['"พร้อมใช้,กำลังทำความสะอาด,กำลังซ่อม"'],
+    });
+    expect(cellOf("baseRent", 50).dataValidation).toMatchObject({ type: "decimal", operator: "greaterThanOrEqual" });
+    expect(cellOf("floor", 2).dataValidation).toMatchObject({ type: "whole" });
+    expect(cellOf("tenantName", 2).dataValidation).toBeUndefined();
+
+    const prop = wb.getWorksheet(SHEET_PROPERTY)!;
+    const valueOf = (label: string) => {
+      let found: ExcelJS.Cell | undefined;
+      prop.eachRow((row) => {
+        if (String(row.getCell(1).value).startsWith(label)) found = row.getCell(2);
+      });
+      return found!;
+    };
+    expect(valueOf("ชำระภายในวันที่").dataValidation.formulae[0]).toMatch(/^"1,2,.*,28"$/);
+    expect(valueOf("เริ่มออกบิล").dataValidation.formulae[0]).toMatch(/^"9\/2569,10\/2569,11\/2569,/);
+    expect(valueOf("ค่าไฟ").dataValidation).toMatchObject({ type: "decimal" });
+  });
+});
+
+describe("ช่วงของการตรวจในช่อง", () => {
+  it("ไม่ซ้อนกัน — ช่วงซ้อนทำให้ Excel ขึ้นว่าไฟล์เสียแล้วขอซ่อม", async () => {
+    // อ่าน XML ดิบ เพราะ exceljs อ่านกลับมาแล้วแตกช่วงเป็นทีละช่อง มองไม่เห็นว่าซ้อน
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(await buildTemplate());
+    const files = Object.keys(zip.files).filter((f) => /worksheets\/sheet\d+\.xml$/.test(f));
+    expect(files.length).toBeGreaterThan(0);
+
+    for (const file of files) {
+      const xml = await zip.file(file)!.async("string");
+      const ranges = [...xml.matchAll(/sqref="([A-Z]+)(\d+)(?::[A-Z]+(\d+))?"/g)].map((m) => ({
+        col: m[1],
+        from: Number(m[2]),
+        to: Number(m[3] ?? m[2]),
+      }));
+      for (const a of ranges) {
+        const overlapping = ranges.filter((b) => b !== a && b.col === a.col && b.from <= a.to && a.from <= b.to);
+        expect(overlapping, `${file} ${a.col}${a.from}:${a.to}`).toEqual([]);
+      }
+    }
+  });
+});

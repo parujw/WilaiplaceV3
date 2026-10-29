@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  billingMonthOptions,
   cellCycle,
   cellDate,
   cellNumber,
@@ -66,6 +67,16 @@ describe("ค่าในช่อง", () => {
     expect(floorFromRoomNo("305")).toBe(3);
     expect(floorFromRoomNo("1201")).toBe(12);
     expect(floorFromRoomNo("A1")).toBeNull();
+  });
+});
+
+describe("billingMonthOptions", () => {
+  it("ย้อนหลังหนึ่งเดือนถึงล่วงหน้าหนึ่งปี เป็นเดือน/ปี พ.ศ. ที่ตัวอ่านอ่านกลับได้", () => {
+    const options = billingMonthOptions(new Date(Date.UTC(2026, 0, 15)));
+    expect(options[0]).toBe("12/2568");
+    expect(options[1]).toBe("1/2569");
+    expect(options.at(-1)).toBe("1/2570");
+    expect(options.map((o) => cellCycle(o))).not.toContain(null);
   });
 });
 
@@ -145,6 +156,8 @@ describe("planImport", () => {
         { roomNo: "105", baseRent: "สามพัน" },
         { roomNo: "106", baseRent: 3500, tenantName: "ก", startDate: "1/6/2569", endDate: "1/6/2568" },
         { roomNo: "107", baseRent: 3500, type: "รายวัน" },
+        { roomNo: "108", baseRent: 3500, condition: "ห้องพร้อม" },
+        { roomNo: "109", baseRent: 3500, floor: 1.5 },
       ]),
     );
     expect(plan).toBeNull();
@@ -155,7 +168,9 @@ describe("planImport", () => {
       [6, "ใส่มิเตอร์ไฟกับมิเตอร์น้ำให้ครบทั้งคู่".slice(0, 20)],
       [7, 'ราคาป้าย ต้องเป็นตัวเลขไม่ติดลบ'.slice(0, 20)],
       [8, "วันสิ้นสุดสัญญามาก่อนวันเริ่มสัญญา".slice(0, 20)],
-      [9, 'ประเภทห้องต้องเป็น "รายเดือน"'.slice(0, 20)],
+      [9, "ประเภทห้องต้องเลือกจากรายการ".slice(0, 20)],
+      [10, "สภาพห้องต้องเลือกจากรายการ".slice(0, 20)],
+      [11, "ชั้นต้องเป็นจำนวนเต็ม".slice(0, 20)],
     ]);
   });
 
@@ -185,6 +200,16 @@ describe("planImport", () => {
     const { plan, warnings } = planImport(input([{ roomNo: "101", baseRent: 3500, tenantName: "ก" }]));
     expect(plan).not.toBeNull();
     expect(warnings).toHaveLength(2);
+  });
+
+  it("สภาพห้องรับคำเดียวกับที่ขึ้นในแอป ไม่ใส่ = พร้อมใช้", () => {
+    const { plan } = planImport(
+      input([
+        { roomNo: "101", baseRent: 3500, condition: "กำลังซ่อม" },
+        { roomNo: "102", baseRent: 3500 },
+      ]),
+    );
+    expect(plan!.rooms.map((r) => r.condition)).toEqual(["repair", "ready"]);
   });
 
   it("จำนวนชั้นของอาคารมาจากห้องชั้นสูงสุด", () => {

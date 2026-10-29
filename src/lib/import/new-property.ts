@@ -10,15 +10,50 @@
  */
 
 import { previousCycle } from "../billing";
+import { CONDITION_LABEL } from "../format";
 import { meterReadingId } from "../ids";
 import { nextCode } from "../lease-ops";
-import type { Cycle, IsoDate, Lease, MeterReading, Property, Rates, Room, RoomType, Tenant } from "../types";
+import type { Cycle, IsoDate, Lease, MeterReading, Property, Rates, Room, RoomCondition, RoomType, Tenant } from "../types";
 
 /** ค่าในช่องหนึ่งช่อง หลังแกะสูตร ลิงก์ และตัวอักษรหลายสีออกแล้ว */
 export type Cell = string | number | boolean | Date | null;
 
 export const SHEET_PROPERTY = "อาคาร";
 export const SHEET_ROOMS = "ห้องและผู้เช่า";
+
+/*
+ * ตัวเลือกของช่องที่ต้องเป็นค่าเดียวกันทุกอาคาร — template ทำเป็น dropdown จากรายการนี้
+ * และตัวอ่านเทียบกับรายการเดียวกัน พิมพ์ "รายเดือ" หรือ "ห้องพร้อม" มาจึงถูกจับได้ ไม่ใช่เดาให้
+ */
+export const ROOM_TYPE_OPTIONS: readonly RoomType[] = ["รายเดือน", "พาณิชย์"];
+
+/** สภาพห้องใช้คำเดียวกับที่ขึ้นในแอป คนกรอกจะได้ไม่ต้องจำสองชุด */
+export const CONDITION_OPTIONS = Object.values(CONDITION_LABEL);
+
+/** วันครบกำหนดต้องมีในทุกเดือน วันที่ 29-31 ไม่มีในกุมภาพันธ์ */
+export const DUE_DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => String(i + 1));
+
+/**
+ * เดือนที่เลือกเริ่มออกบิลได้ — ย้อนหลังหนึ่งเดือนถึงล่วงหน้าหนึ่งปี แบบ 11/2569
+ * สร้างตามวันที่ดาวน์โหลด template ไฟล์ที่โหลดไว้นานแล้วก็ยังพิมพ์เดือนอื่นเองได้
+ */
+export function billingMonthOptions(today: Date): string[] {
+  return Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 1 + i, 1));
+    return `${d.getUTCMonth() + 1}/${d.getUTCFullYear() + 543}`;
+  });
+}
+
+/**
+ * การตรวจในช่องของ Excel
+ *   list     เลือกจาก dropdown
+ *   number   ตัวเลขไม่ติดลบ มีทศนิยมได้ (เงิน ค่าต่อหน่วย มิเตอร์)
+ *   integer  จำนวนเต็มไม่ติดลบ (ชั้น)
+ */
+export type CellRule =
+  | { kind: "list"; options: readonly string[] }
+  | { kind: "number" }
+  | { kind: "integer" };
 
 /* --------------------------------- ชีตอาคาร -------------------------------- */
 
@@ -32,6 +67,8 @@ export interface PropertyField {
   /** ค่าที่ใส่ไว้ให้ใน template */
   example: string | number;
   hint: string;
+  /** เดือนเริ่มออกบิลไม่มีในนี้ — ตัวเลือกขึ้นกับวันที่สร้าง template ดู billingMonthOptions */
+  rule?: CellRule;
 }
 
 export const PROPERTY_FIELDS: PropertyField[] = [
@@ -40,18 +77,18 @@ export const PROPERTY_FIELDS: PropertyField[] = [
   { key: "shortName", label: "ชื่อย่อ", example: "", hint: "เช่น WLP2 · ไม่ใส่จะใช้รหัสอาคารตัวใหญ่" },
   { key: "address", label: "ที่อยู่", example: "", hint: "" },
   { key: "phone", label: "เบอร์โทรอาคาร", example: "", hint: "พิมพ์ลงใบแจ้งหนี้และใบจดมิเตอร์" },
-  { key: "elec", label: "ค่าไฟ (บาท/หน่วย)", required: true, example: 8, hint: "ค่าเริ่มต้นของทุกห้อง" },
-  { key: "water", label: "ค่าน้ำ (บาท/หน่วย)", required: true, example: 20, hint: "ค่าเริ่มต้นของทุกห้อง" },
-  { key: "ac", label: "ค่าแอร์ (บาท/เดือน)", example: 0, hint: "ไม่มีใส่ 0 · ห้องที่ต่างจากนี้ใส่ในชีตห้อง" },
-  { key: "internet", label: "ค่าอินเทอร์เน็ต (บาท/เดือน)", example: 0, hint: "ไม่มีใส่ 0" },
-  { key: "parking", label: "ค่าที่จอดรถ (บาท/เดือน)", example: 0, hint: "ไม่มีใส่ 0" },
-  { key: "dueDay", label: "ชำระภายในวันที่", example: 5, hint: "วันที่ 1-28 ของเดือนถัดไป" },
+  { key: "elec", label: "ค่าไฟ (บาท/หน่วย)", required: true, example: 8, hint: "ค่าเริ่มต้นของทุกห้อง", rule: { kind: "number" } },
+  { key: "water", label: "ค่าน้ำ (บาท/หน่วย)", required: true, example: 20, hint: "ค่าเริ่มต้นของทุกห้อง", rule: { kind: "number" } },
+  { key: "ac", label: "ค่าแอร์ (บาท/เดือน)", example: 0, hint: "ไม่มีใส่ 0 · ห้องที่ต่างจากนี้ใส่ในชีตห้อง", rule: { kind: "number" } },
+  { key: "internet", label: "ค่าอินเทอร์เน็ต (บาท/เดือน)", example: 0, hint: "ไม่มีใส่ 0", rule: { kind: "number" } },
+  { key: "parking", label: "ค่าที่จอดรถ (บาท/เดือน)", example: 0, hint: "ไม่มีใส่ 0", rule: { kind: "number" } },
+  { key: "dueDay", label: "ชำระภายในวันที่", example: 5, hint: "วันที่ 1-28 ของเดือนถัดไป", rule: { kind: "list", options: DUE_DAY_OPTIONS } },
   {
     key: "firstCycle",
     label: "เริ่มออกบิลในระบบนี้ตั้งแต่เดือน",
     required: true,
     example: "",
-    hint: "เช่น 11/2569 — เลขมิเตอร์ล่าสุดในชีตห้องจะเป็นเลขครั้งก่อนของบิลเดือนนี้",
+    hint: "เลือกจากรายการ — เลขมิเตอร์ล่าสุดในชีตห้องจะเป็นเลขครั้งก่อนของบิลเดือนนี้",
   },
 ];
 
@@ -59,7 +96,7 @@ export const PROPERTY_FIELDS: PropertyField[] = [
 
 export interface RoomColumn {
   key:
-    | "roomNo" | "floor" | "type" | "baseRent"
+    | "roomNo" | "floor" | "type" | "condition" | "baseRent"
     | "tenantName" | "nickname" | "phone"
     | "startDate" | "endDate" | "rent" | "deposit" | "advance"
     | "ac" | "internet" | "parking"
@@ -73,26 +110,35 @@ export interface RoomColumn {
   text?: boolean;
   date?: boolean;
   hint: string;
+  rule?: CellRule;
 }
 
 export const ROOM_COLUMNS: RoomColumn[] = [
   { key: "roomNo", label: "เลขห้อง", required: true, group: "room", width: 10, text: true, hint: "ห้ามซ้ำกัน" },
-  { key: "floor", label: "ชั้น", group: "room", width: 7, hint: "ไม่ใส่จะเดาจากเลขห้อง เช่น 305 = ชั้น 3" },
-  { key: "type", label: "ประเภท", group: "room", width: 11, hint: "รายเดือน หรือ พาณิชย์ · ไม่ใส่ = รายเดือน" },
-  { key: "baseRent", label: "ราคาป้าย", required: true, group: "room", width: 11, hint: "ค่าเช่าตอนห้องว่าง" },
+  { key: "floor", label: "ชั้น", group: "room", width: 7, hint: "ไม่ใส่จะเดาจากเลขห้อง เช่น 305 = ชั้น 3", rule: { kind: "integer" } },
+  { key: "type", label: "ประเภท", group: "room", width: 11, hint: "เลือกจากรายการ · ไม่ใส่ = รายเดือน", rule: { kind: "list", options: ROOM_TYPE_OPTIONS } },
+  {
+    key: "condition",
+    label: "สภาพห้อง",
+    group: "room",
+    width: 17,
+    hint: `เลือกจากรายการ · ไม่ใส่ = ${CONDITION_LABEL.ready}`,
+    rule: { kind: "list", options: CONDITION_OPTIONS },
+  },
+  { key: "baseRent", label: "ราคาป้าย", required: true, group: "room", width: 11, hint: "ค่าเช่าตอนห้องว่าง", rule: { kind: "number" } },
   { key: "tenantName", label: "ชื่อผู้เช่า", group: "tenant", width: 22, hint: "ห้องว่างเว้นช่องผู้เช่าทั้งหมด" },
   { key: "nickname", label: "ชื่อเล่น", group: "tenant", width: 10, hint: "" },
   { key: "phone", label: "เบอร์โทร", group: "tenant", width: 13, text: true, hint: "" },
   { key: "startDate", label: "วันเริ่มสัญญา", group: "tenant", width: 13, date: true, hint: "เช่น 1/6/2568" },
   { key: "endDate", label: "วันสิ้นสุดสัญญา", group: "tenant", width: 13, date: true, hint: "ไม่มีกำหนดเว้นว่าง" },
-  { key: "rent", label: "ค่าเช่าจริง", group: "tenant", width: 11, hint: "ไม่ใส่ = ราคาป้าย" },
-  { key: "deposit", label: "เงินประกัน", group: "tenant", width: 11, hint: "" },
-  { key: "advance", label: "ค่าเช่าล่วงหน้า", group: "tenant", width: 12, hint: "" },
-  { key: "ac", label: "ค่าแอร์/เดือน", group: "tenant", width: 11, hint: "ไม่ใส่ = ค่าของอาคาร" },
-  { key: "internet", label: "ค่าเน็ต/เดือน", group: "tenant", width: 11, hint: "ไม่ใส่ = ค่าของอาคาร" },
-  { key: "parking", label: "ค่าที่จอด/เดือน", group: "tenant", width: 12, hint: "ไม่ใส่ = ค่าของอาคาร" },
-  { key: "elec", label: "มิเตอร์ไฟล่าสุด", group: "meter", width: 13, hint: "เลขบนหน้าปัดครั้งล่าสุด" },
-  { key: "water", label: "มิเตอร์น้ำล่าสุด", group: "meter", width: 13, hint: "ใส่คู่กับมิเตอร์ไฟ" },
+  { key: "rent", label: "ค่าเช่าจริง", group: "tenant", width: 11, hint: "ไม่ใส่ = ราคาป้าย", rule: { kind: "number" } },
+  { key: "deposit", label: "เงินประกัน", group: "tenant", width: 11, hint: "", rule: { kind: "number" } },
+  { key: "advance", label: "ค่าเช่าล่วงหน้า", group: "tenant", width: 12, hint: "", rule: { kind: "number" } },
+  { key: "ac", label: "ค่าแอร์/เดือน", group: "tenant", width: 11, hint: "ไม่ใส่ = ค่าของอาคาร", rule: { kind: "number" } },
+  { key: "internet", label: "ค่าเน็ต/เดือน", group: "tenant", width: 11, hint: "ไม่ใส่ = ค่าของอาคาร", rule: { kind: "number" } },
+  { key: "parking", label: "ค่าที่จอด/เดือน", group: "tenant", width: 12, hint: "ไม่ใส่ = ค่าของอาคาร", rule: { kind: "number" } },
+  { key: "elec", label: "มิเตอร์ไฟล่าสุด", group: "meter", width: 13, hint: "เลขบนหน้าปัดครั้งล่าสุด", rule: { kind: "number" } },
+  { key: "water", label: "มิเตอร์น้ำล่าสุด", group: "meter", width: 13, hint: "ใส่คู่กับมิเตอร์ไฟ", rule: { kind: "number" } },
   { key: "note", label: "หมายเหตุ", group: "room", width: 20, hint: "" },
 ];
 
@@ -315,16 +361,28 @@ export function planImport(input: ImportInput): ImportResult {
     else seenRoomNo.set(roomNo, row);
 
     let floor = num("floor", "ชั้น");
+    if (floor !== null && !Number.isInteger(floor)) {
+      err(`ชั้นต้องเป็นจำนวนเต็ม (ได้ "${cellText(cells.floor)}")`);
+      floor = null;
+    }
     if (floor === null && roomNo && !rowErrors.length) {
       floor = floorFromRoomNo(roomNo);
       if (floor === null) err(`เดาชั้นจากเลขห้อง ${roomNo} ไม่ได้ ใส่ช่องชั้นด้วย`);
     }
 
     const typeText = cellText(cells.type);
-    if (typeText && typeText !== "รายเดือน" && typeText !== "พาณิชย์") {
-      err(`ประเภทห้องต้องเป็น "รายเดือน" หรือ "พาณิชย์" (ได้ "${typeText}")`);
+    if (typeText && !ROOM_TYPE_OPTIONS.includes(typeText as RoomType)) {
+      err(`ประเภทห้องต้องเลือกจากรายการ: ${ROOM_TYPE_OPTIONS.join(", ")} (ได้ "${typeText}")`);
     }
     const type: RoomType = typeText === "พาณิชย์" ? "พาณิชย์" : "รายเดือน";
+
+    const conditionText = cellText(cells.condition);
+    const condition = (Object.keys(CONDITION_LABEL) as RoomCondition[]).find(
+      (key) => CONDITION_LABEL[key] === conditionText,
+    );
+    if (conditionText && !condition) {
+      err(`สภาพห้องต้องเลือกจากรายการ: ${CONDITION_OPTIONS.join(", ")} (ได้ "${conditionText}")`);
+    }
 
     const rent = num("rent", "ค่าเช่าจริง");
     let baseRent = num("baseRent", "ราคาป้าย");
@@ -373,7 +431,7 @@ export function planImport(input: ImportInput): ImportResult {
       floor: floor ?? 0,
       type,
       baseRent: baseRent ?? 0,
-      condition: "ready",
+      condition: condition ?? "ready",
       activeLeaseId: null,
       ...(cellText(cells.note) ? { note: cellText(cells.note) } : {}),
     };

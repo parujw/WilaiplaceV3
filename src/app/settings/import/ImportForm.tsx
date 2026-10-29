@@ -117,8 +117,9 @@ export function ImportForm({ firestore }: { firestore: boolean }) {
       body: JSON.stringify({ propertyId: summary.propertyId }),
     });
     if (res.ok) {
-      router.replace("/");
-      router.refresh();
+      // โหลดหน้าใหม่ทั้งหน้า ไม่ใช้ router.replace + refresh
+      // refresh ที่ตามมาติดๆ ยกเลิกการเปลี่ยนหน้า แล้วค้างอยู่หน้านำเข้า
+      window.location.assign("/");
     } else {
       setBusy(false);
       router.push("/select");

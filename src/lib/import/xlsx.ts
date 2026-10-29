@@ -7,11 +7,13 @@
 
 import ExcelJS from "exceljs";
 import {
+  billingMonthOptions,
   PROPERTY_FIELDS,
   ROOM_COLUMNS,
   SHEET_PROPERTY,
   SHEET_ROOMS,
   type Cell,
+  type CellRule,
   type ImportInput,
   type SheetRow,
 } from "./new-property";
@@ -30,7 +32,7 @@ const GROUP_FILL: Record<string, string> = {
 
 const EXAMPLE_ROWS: Array<Partial<Record<(typeof ROOM_COLUMNS)[number]["key"], string | number>>> = [
   { roomNo: "101", type: "รายเดือน", baseRent: 3500, tenantName: "สมชาย ใจดี", nickname: "ชาย", phone: "0812345678", startDate: "1/6/2568", endDate: "31/5/2569", rent: 3500, deposit: 7000, ac: 500, elec: 1234, water: 56 },
-  { roomNo: "102", type: "รายเดือน", baseRent: 3500, elec: 880, water: 31, note: "ห้องว่าง — เว้นช่องผู้เช่า" },
+  { roomNo: "102", type: "รายเดือน", condition: "กำลังทำความสะอาด", baseRent: 3500, elec: 880, water: 31, note: "ห้องว่าง — เว้นช่องผู้เช่า" },
   { roomNo: "103", baseRent: 3800, tenantName: "สมหญิง รักดี", phone: "0898765432", startDate: "15/8/2568", rent: 3600, deposit: 7200, elec: 2010, water: 77 },
   { roomNo: "A1", floor: 1, type: "พาณิชย์", baseRent: 8000, tenantName: "ร้านกาแฟดีดี", startDate: "1/1/2568", rent: 8000, deposit: 16000, elec: 5320, water: 140 },
 ];
@@ -43,6 +45,29 @@ function styleHeader(row: ExcelJS.Row, fills: string[]) {
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fills[col - 1] ?? "FFEEEEEE" } };
     cell.border = { bottom: { style: "thin", color: { argb: "FF999999" } } };
   });
+}
+
+/**
+ * การตรวจในช่องของ Excel — dropdown สำหรับค่าที่ต้องเหมือนกันทุกอาคาร ตัวเลขห้ามติดลบ
+ * กรอกผิดแล้ว Excel เด้งเตือนตั้งแต่ตอนพิมพ์ ไม่ต้องรอไปเจอตอนอัปโหลด
+ */
+function validationFor(rule: CellRule, label: string): ExcelJS.DataValidation {
+  const common = { allowBlank: true, showErrorMessage: true, errorStyle: "stop" as const, errorTitle: label };
+  if (rule.kind === "list") {
+    return {
+      ...common,
+      type: "list",
+      formulae: [`"${rule.options.join(",")}"`],
+      error: "เลือกจากรายการในช่องนี้",
+    };
+  }
+  return {
+    ...common,
+    type: rule.kind === "integer" ? "whole" : "decimal",
+    operator: "greaterThanOrEqual",
+    formulae: [0],
+    error: rule.kind === "integer" ? "ใส่จำนวนเต็ม ไม่ติดลบ" : "ใส่ตัวเลข ไม่ติดลบ ไม่ต้องใส่คำว่าบาท",
+  };
 }
 
 function addRoomSheet(wb: ExcelJS.Workbook, name: string, rows: typeof EXAMPLE_ROWS) {
@@ -60,23 +85,25 @@ function addRoomSheet(wb: ExcelJS.Workbook, name: string, rows: typeof EXAMPLE_R
 
   for (const example of rows) ws.addRow(example);
 
-  const typeCol = ROOM_COLUMNS.findIndex((c) => c.key === "type") + 1;
-  const letter = ws.getColumn(typeCol).letter;
-  for (let r = 2; r <= PREPARED_ROWS + 1; r++) {
-    ws.getCell(`${letter}${r}`).dataValidation = {
-      type: "list",
-      allowBlank: true,
-      formulae: ['"รายเดือน,พาณิชย์"'],
-      showErrorMessage: true,
-      errorTitle: "ประเภทห้อง",
-      error: "เลือก รายเดือน หรือ พาณิชย์",
-    };
-  }
+  /*
+   * ใส่การตรวจเป็นช่วงเดียวทั้งคอลัมน์ ไม่ใส่ทีละช่อง
+   * ทีละช่องแล้ว exceljs รวมช่วงผิด — เรียงที่อยู่แบบตัวอักษร C10 มาก่อน C2
+   * ได้ C10:C201 ซ้อนกับ C2:C201 ซึ่ง Excel ถือว่าไฟล์เสียแล้วขอซ่อมตอนเปิด
+   * dataValidations.add ไม่อยู่ในชนิดของ exceljs แต่มีจริงและรับที่อยู่แบบช่วงได้
+   */
+  const validations = (ws as unknown as {
+    dataValidations: { add(address: string, validation: ExcelJS.DataValidation): void };
+  }).dataValidations;
+  ROOM_COLUMNS.forEach((c, i) => {
+    if (!c.rule) return;
+    const letter = ws.getColumn(i + 1).letter;
+    validations.add(`${letter}2:${letter}${PREPARED_ROWS + 1}`, validationFor(c.rule, c.label));
+  });
   return ws;
 }
 
 /** template เปล่าพร้อมตัวอย่างและวิธีกรอก */
-export async function buildTemplate(): Promise<Uint8Array> {
+export async function buildTemplate(today = new Date()): Promise<Uint8Array> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Wilai Communities";
 
@@ -89,6 +116,7 @@ export async function buildTemplate(): Promise<Uint8Array> {
     ["2", `กรอกชีต "${SHEET_ROOMS}" — หนึ่งแถวต่อหนึ่งห้อง ทั้งห้องที่มีคนอยู่และห้องว่าง`],
     ["", "ห้องว่าง: กรอกแค่ช่องสีส้ม (ห้อง) กับช่องสีเขียว (มิเตอร์) เว้นช่องสีฟ้า (ผู้เช่า) ทั้งหมด"],
     ["", "ช่องที่มี * ต้องกรอก ช่องอื่นเว้นได้ · คำอธิบายทุกคอลัมน์อยู่ในตารางด้านล่าง"],
+    ["", "ประเภท สภาพห้อง วันครบกำหนด และเดือนเริ่มออกบิล ให้เลือกจาก dropdown — ทุกอาคารจะได้ค่าแบบเดียวกัน"],
     ["", "วันที่ใช้ วัน/เดือน/ปี พ.ศ. เช่น 1/6/2568 · เดือนใช้ เดือน/ปี เช่น 11/2569"],
     ["3", "มิเตอร์ล่าสุด = เลขบนหน้าปัดครั้งล่าสุดที่จดไว้ จะเป็นเลขครั้งก่อนของบิลแรกที่ออกในระบบ"],
     ["", "ใส่มิเตอร์ไฟกับน้ำให้ครบคู่ ไม่ทราบให้เว้นทั้งคู่ แล้วกรอกเลขครั้งก่อนเองตอนออกบิลแรก"],
@@ -126,6 +154,10 @@ export async function buildTemplate(): Promise<Uint8Array> {
     row.getCell(3).font = { color: { argb: "FF6B7280" } };
     // ตัวเลขต้องเป็นตัวเลขจริง ไม่ใช่ข้อความที่หน้าตาเหมือนตัวเลข
     if (typeof f.example === "number") row.getCell(2).numFmt = "General";
+
+    const rule: CellRule | undefined =
+      f.key === "firstCycle" ? { kind: "list", options: billingMonthOptions(today) } : f.rule;
+    if (rule) row.getCell(2).dataValidation = validationFor(rule, f.label);
   }
 
   /* --- ห้อง --- */
