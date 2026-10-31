@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Alert, Field, Ghost, Input, Select, Submit, send } from "@/components/form";
 import Link from "next/link";
 import { EDITABLE_LINE_TYPES, LINE_TYPE_LABEL, round2 } from "@/lib/bill-edit";
-import { meterLines, type MeterValues } from "@/lib/billing";
+import { meterUnits, type MeterValues } from "@/lib/billing";
 import { BILL_STATUS_LABEL, baht, cycleLabel } from "@/lib/format";
 import type { BillLineType, BillStatus, Rates } from "@/lib/types";
 
@@ -60,26 +60,77 @@ const row = (type: BillLineType, label: string, rate: number | string = ""): Row
   rate: String(rate),
 });
 
+/** เลขมิเตอร์ที่กรอกในฟอร์ม — เก็บเป็นข้อความ ช่องว่างคือยังไม่กรอก ไม่ใช่ 0 */
+interface MeterInput {
+  elecPrev: string;
+  elec: string;
+  waterPrev: string;
+  water: string;
+}
+
+/** เลขตั้งต้นของห้องในรอบนั้น — จดไว้แล้วใช้ของที่จด ยังไม่จดเอาเลขครั้งก่อนมาใส่ให้ */
+function meterOf(info: CycleInfo | undefined): MeterInput {
+  const text = (n: number | undefined) => (n === undefined ? "" : String(n));
+  return {
+    elecPrev: text(info?.reading?.elecPrevious ?? info?.previous?.elec),
+    elec: text(info?.reading?.elecCurrent),
+    waterPrev: text(info?.reading?.waterPrevious ?? info?.previous?.water),
+    water: text(info?.reading?.waterCurrent),
+  };
+}
+
+/** เลขครบทั้งสี่ช่อง — ใช้คิดหน่วยและบันทึกเป็นการจดมิเตอร์ของรอบนี้ได้ */
+function meterValues(m: MeterInput): MeterValues | null {
+  const fields = [m.elecPrev, m.elec, m.waterPrev, m.water];
+  if (fields.some((f) => f.trim() === "" || !Number.isFinite(Number(f)))) return null;
+  return {
+    elecPrevious: Number(m.elecPrev),
+    elecCurrent: Number(m.elec),
+    waterPrevious: Number(m.waterPrev),
+    waterCurrent: Number(m.water),
+  };
+}
+
+/**
+ * ใส่ค่าไฟค่าน้ำตามเลขมิเตอร์ที่กรอก แทนของเดิมที่ตำแหน่งเดิม
+ * ค่าต่อหน่วยใช้ของที่อยู่ในรายการ ถ้าแก้ราคาเองไว้ก็ไม่โดนทับ
+ * ยังกรอกเลขไม่ครบ เหลือช่องไว้ให้ใส่จำนวนหน่วยเองได้ ไม่ใส่ก็ไม่ขึ้นบนบิล
+ */
+function withMeterRows(rows: Row[], m: MeterInput, rates: Rates): Row[] {
+  const isMeter = (r: Row) => r.type === "electricity" || r.type === "water";
+  const existing = (type: BillLineType) => rows.find((r) => r.type === type);
+
+  const meterRow = (type: "electricity" | "water", name: string, prev: string, cur: string, rate: number): Row => {
+    const old = existing(type);
+    const unitRate = old?.rate || String(rate);
+    const base = { ...row(type, name, unitRate), key: old?.key ?? row(type, name).key };
+    if (prev.trim() === "" || cur.trim() === "") return { ...base, qty: old && !old.label.includes("→") ? old.qty : "" };
+    return { ...base, label: `${name} (${prev} → ${cur})`, qty: String(meterUnits(Number(prev), Number(cur))) };
+  };
+
+  const firstMeter = rows.findIndex(isMeter);
+  const at = firstMeter >= 0 ? firstMeter : rows.findIndex((r) => r.type === "rent") + 1;
+  const insertAt = rows.slice(0, at).filter((r) => !isMeter(r)).length;
+  const kept = rows.filter((r) => !isMeter(r));
+  return [
+    ...kept.slice(0, insertAt),
+    meterRow("electricity", "ค่าไฟ", m.elecPrev, m.elec, rates.elec),
+    meterRow("water", "ค่าน้ำ", m.waterPrev, m.water, rates.water),
+    ...kept.slice(insertAt),
+  ];
+}
+
 /** รายการเริ่มต้นของห้องในรอบนั้น — ห้องว่างเริ่มที่ค่ามัดจำ (คนจอง) */
 function autoRows(room: RoomChoice | undefined, info: CycleInfo | undefined): Row[] {
   if (!room) return [];
   if (!room.rates || !room.tenantId) return [row("deposit", "ค่ามัดจำ", room.deposit || room.rent || "")];
 
   const rows: Row[] = [row("rent", "ค่าเช่าห้อง", room.rent)];
-  if (info?.reading) {
-    for (const line of meterLines(info.reading, room.rates)) {
-      rows.push({ ...row(line.type, line.label, line.rate), qty: String(line.qty) });
-    }
-  } else {
-    // ยังไม่จดมิเตอร์ — ใส่ช่องไว้ให้กรอกหน่วยเอง ไม่ใส่ก็ไม่ขึ้นบนบิล
-    rows.push({ ...row("electricity", "ค่าไฟ", room.rates.elec), qty: "" });
-    rows.push({ ...row("water", "ค่าน้ำ", room.rates.water), qty: "" });
-  }
   if (room.rates.ac > 0) rows.push(row("ac", "ค่าเช่าแอร์", room.rates.ac));
   if (room.rates.internet > 0) rows.push(row("internet", "ค่าอินเทอร์เน็ต", room.rates.internet));
   if (room.rates.parking > 0) rows.push(row("parking", "ค่าที่จอดรถ", room.rates.parking));
   if (info && info.carryOver > 0) rows.push(row("carryOver", "ยอดค้างยกมา", info.carryOver));
-  return rows;
+  return withMeterRows(rows, meterOf(info), room.rates);
 }
 
 function amountOf(r: Row): number {
@@ -108,6 +159,7 @@ export function NewBillForm({
   const [rows, setRows] = useState<Row[]>(() =>
     autoRows(rooms.find((r) => r.id === defaultRoom), info[defaultCycle]?.[defaultRoom]),
   );
+  const [meter, setMeter] = useState<MeterInput>(() => meterOf(info[defaultCycle]?.[defaultRoom]));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -119,7 +171,15 @@ export function NewBillForm({
     setRoomId(nextRoom);
     setCycle(nextCycle);
     setRows(autoRows(rooms.find((r) => r.id === nextRoom), info[nextCycle]?.[nextRoom]));
+    setMeter(meterOf(info[nextCycle]?.[nextRoom]));
   }
+
+  function changeMeter(field: keyof MeterInput, value: string) {
+    const next = { ...meter, [field]: value.replace(/[^\d.]/g, "") };
+    setMeter(next);
+    if (room?.rates) setRows((prev) => withMeterRows(prev, next, room.rates!));
+  }
+  const meterReady = meterValues(meter);
   const total = round2(rows.reduce((sum, r) => sum + amountOf(r), 0));
   const patch = (key: string, field: keyof Row, value: string) =>
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, [field]: value } : r)));
@@ -149,6 +209,8 @@ export function NewBillForm({
             note,
             tenantId: tenantChoice || undefined,
             tenantName: needsName ? tenantName : undefined,
+            // เลขครบก็บันทึกเป็นการจดมิเตอร์ของรอบนี้ด้วย เลขครั้งก่อนของเดือนหน้าจะได้ถูก
+            meter: room?.tenantId && meterReady ? meterReady : undefined,
             lines: rows
               // ช่องค่าไฟค่าน้ำที่เติมไว้ให้แต่ไม่ได้กรอกหน่วย ไม่ต้องขึ้นบนบิลเป็นบรรทัด 0 บาท
               .filter((r) => !((r.type === "electricity" || r.type === "water") && amountOf(r) === 0))
@@ -224,7 +286,7 @@ export function NewBillForm({
           ) : (
             <p className="text-muted">
               ยังไม่จดมิเตอร์รอบนี้
-              {status.previous ? ` · ครั้งก่อน ไฟ ${status.previous.elec} น้ำ ${status.previous.water}` : ""} — กรอกหน่วยเองด้านล่าง หรือ{" "}
+              {status.previous ? ` · ครั้งก่อน ไฟ ${status.previous.elec} น้ำ ${status.previous.water}` : ""} — กรอกเลขในช่องมิเตอร์ด้านล่าง หรือ{" "}
               <Link href={`/meter?cycle=${cycle}`} className="font-semibold text-accent">ไปจดมิเตอร์</Link>
             </p>
           )}
@@ -234,12 +296,62 @@ export function NewBillForm({
         </div>
       ) : null}
 
+      {room?.rates && room.tenantId ? (
+        <div className="card space-y-3 p-4">
+          <h2 className="text-[15px] font-bold tracking-tight">มิเตอร์รอบนี้</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {([
+              ["ไฟ", "elecPrev", "elec", room.rates.elec],
+              ["น้ำ", "waterPrev", "water", room.rates.water],
+            ] as const).map(([name, prevKey, curKey, rate]) => {
+              const units =
+                meter[prevKey] !== "" && meter[curKey] !== ""
+                  ? meterUnits(Number(meter[prevKey]), Number(meter[curKey]))
+                  : null;
+              return (
+                <div key={name} className="space-y-1.5">
+                  <p className="text-[12px] font-semibold text-muted">มิเตอร์{name}</p>
+                  {/* ช่องที่มีเลขอยู่แล้วไม่เห็น placeholder ต้องมีป้ายกำกับไว้ข้างช่องเสมอ */}
+                  <label className="flex items-center gap-2">
+                    <span className="w-12 shrink-0 text-[11px] text-muted">ครั้งก่อน</span>
+                    <Input
+                      inputMode="numeric" value={meter[prevKey]}
+                      onChange={(e) => changeMeter(prevKey, e.target.value)}
+                      aria-label={`เลขมิเตอร์${name}ครั้งก่อน`} className="!py-2 text-right text-[13px] tabular-nums"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <span className="w-12 shrink-0 text-[11px] font-semibold">ครั้งนี้</span>
+                    <Input
+                      inputMode="numeric" value={meter[curKey]}
+                      onChange={(e) => changeMeter(curKey, e.target.value)}
+                      aria-label={`เลขมิเตอร์${name}ครั้งนี้`} className="text-right font-semibold tabular-nums"
+                    />
+                  </label>
+                  <p className="text-right text-[11px] text-muted">
+                    {units === null ? "ยังไม่จด" : `${units} หน่วย × ${rate} = ${baht(units * rate)} ฿`}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[11px] leading-relaxed text-muted">
+            {status?.rentBill
+              ? `รอบนี้ออกบิลค่าเช่าแล้ว (${status.rentBill.billNo}) เลขที่กรอกตรงนี้ใช้คิดในใบนี้เท่านั้น ถ้าจะแก้เลขมิเตอร์ให้แก้ที่หน้าจดมิเตอร์`
+              : "กรอกครบทั้งไฟและน้ำ ระบบบันทึกเป็นเลขมิเตอร์ของรอบนี้ด้วย เดือนหน้าจะได้เลขครั้งก่อนถูก"}
+          </p>
+        </div>
+      ) : null}
+
       <div className="card space-y-3 p-4">
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="text-[15px] font-bold tracking-tight">รายการในบิล</h2>
           <button
             type="button"
-            onClick={() => setRows(autoRows(room, status))}
+            onClick={() => {
+              setRows(autoRows(room, status));
+              setMeter(meterOf(status));
+            }}
             className="text-[12px] font-semibold text-accent"
           >
             เติมรายการใหม่
