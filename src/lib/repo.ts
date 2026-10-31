@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { buildAlerts, type Alert } from "./alerts";
 import { outstandingOfTenancy, tenancyLeaseIds } from "./tenancy";
-import { currentCycle, daysOverdue, dueDateFor, previousCycle } from "./billing";
+import { currentCycle, daysOverdue, dueDateFor, nextCycle, previousCycle } from "./billing";
 import {
   actualsByCycle, collectionRate, expirySchedule, recurringMonthly, rentBand, vacancyLoss,
 } from "./forecast";
@@ -178,6 +178,20 @@ export async function availableCycles(propertyId: string): Promise<Cycle[]> {
   const bills = await billsOf(propertyId);
   const cycles = new Set(bills.map((b) => b.cycle));
   cycles.add(currentCycle());
+  return [...cycles].sort().reverse();
+}
+
+/**
+ * รอบที่จดมิเตอร์และออกบิลได้ — รอบที่มีข้อมูลแล้ว + ล่วงหน้าอีกสองเดือน
+ *
+ * ต่างจาก availableCycles ที่ใช้ดูข้อมูลย้อนหลัง หน้านี้ต้องเลือกเดือนหน้าได้
+ * ผู้เช่าส่งใบจดมิเตอร์มาก่อนสิ้นเดือน หรือจะย้ายออกแล้วขอเคลียร์บิลล่วงหน้า
+ */
+export async function billingCycles(propertyId: string): Promise<Cycle[]> {
+  const cycles = new Set(await availableCycles(propertyId));
+  const next = nextCycle(currentCycle());
+  cycles.add(next);
+  cycles.add(nextCycle(next));
   return [...cycles].sort().reverse();
 }
 

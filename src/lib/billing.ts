@@ -31,33 +31,77 @@ export function meterUnits(previous: number, current: number, digits = 5): numbe
   return units > rollover / 2 ? 0 : units;
 }
 
+export interface MeterValues {
+  elecPrevious: number;
+  elecCurrent: number;
+  waterPrevious: number;
+  waterCurrent: number;
+}
+
+/** รายการค่าไฟค่าน้ำจากเลขมิเตอร์ — ไม่ได้ใช้เลย (0 หน่วย) ก็ไม่ใส่รายการ */
+export function meterLines(meter: MeterValues, rates: Pick<Lease["rates"], "elec" | "water">): BillLine[] {
+  const lines: BillLine[] = [];
+  const elecUnits = meterUnits(meter.elecPrevious, meter.elecCurrent);
+  if (elecUnits > 0) {
+    lines.push({
+      type: "electricity",
+      label: `ค่าไฟ (${meter.elecPrevious} → ${meter.elecCurrent})`,
+      qty: elecUnits,
+      rate: rates.elec,
+      amount: elecUnits * rates.elec,
+    });
+  }
+  const waterUnits = meterUnits(meter.waterPrevious, meter.waterCurrent);
+  if (waterUnits > 0) {
+    lines.push({
+      type: "water",
+      label: `ค่าน้ำ (${meter.waterPrevious} → ${meter.waterCurrent})`,
+      qty: waterUnits,
+      rate: rates.water,
+      amount: waterUnits * rates.water,
+    });
+  }
+  return lines;
+}
+
+/**
+ * จดมิเตอร์ใหม่หลังออกบิลไปแล้ว — เปลี่ยนเฉพาะรายการค่าไฟค่าน้ำ รายการอื่นคงเดิม
+ *
+ * บิลกับเลขมิเตอร์ต้องตรงกันเสมอ เลขของรอบนี้คือเลขครั้งก่อนของรอบหน้า
+ * แก้เลขแล้วไม่แก้บิล หน่วยที่ต่างกันจะหายไปหรือถูกคิดซ้ำในบิลเดือนหน้า
+ *
+ * ค่าต่อหน่วยใช้ของที่อยู่ในบิลเดิม ถ้าแก้ราคาในบิลไว้เองก็ไม่โดนทับ
+ * บิลเดิมไม่มีรายการไฟหรือน้ำ (เดือนก่อนไม่ได้ใช้) จึงใช้ค่าของสัญญา
+ * รายการใหม่ใส่ที่เดิม หรือต่อท้ายค่าเช่าถ้าบิลเดิมไม่มี ลำดับบนใบแจ้งหนี้ไม่กระโดด
+ */
+export function withMeterLines(
+  lines: BillLine[],
+  meter: MeterValues,
+  leaseRates: Pick<Lease["rates"], "elec" | "water">,
+): BillLine[] {
+  const isMeter = (l: BillLine) => l.type === "electricity" || l.type === "water";
+  const rates = {
+    elec: lines.find((l) => l.type === "electricity")?.rate ?? leaseRates.elec,
+    water: lines.find((l) => l.type === "water")?.rate ?? leaseRates.water,
+  };
+
+  const firstMeter = lines.findIndex(isMeter);
+  const rentIndex = lines.findIndex((l) => l.type === "rent");
+  const at = firstMeter >= 0 ? firstMeter : rentIndex + 1;
+
+  const kept = lines.filter((l) => !isMeter(l));
+  // ตำแหน่งที่จะแทรกในรายการที่ตัดค่าไฟค่าน้ำออกแล้ว — นับเฉพาะรายการที่อยู่ก่อนหน้า
+  const insertAt = lines.slice(0, at).filter((l) => !isMeter(l)).length;
+  return [...kept.slice(0, insertAt), ...meterLines(meter, rates), ...kept.slice(insertAt)];
+}
+
 export function buildBill(input: BillInput): BillDraft {
   const { lease } = input;
   const lines: BillLine[] = [];
 
   lines.push({ type: "rent", label: "ค่าเช่าห้อง", qty: 1, rate: lease.rent, amount: lease.rent });
 
-  const elecUnits = meterUnits(input.elecPrevious, input.elecCurrent);
-  if (elecUnits > 0) {
-    lines.push({
-      type: "electricity",
-      label: `ค่าไฟ (${input.elecPrevious} → ${input.elecCurrent})`,
-      qty: elecUnits,
-      rate: lease.rates.elec,
-      amount: elecUnits * lease.rates.elec,
-    });
-  }
-
-  const waterUnits = meterUnits(input.waterPrevious, input.waterCurrent);
-  if (waterUnits > 0) {
-    lines.push({
-      type: "water",
-      label: `ค่าน้ำ (${input.waterPrevious} → ${input.waterCurrent})`,
-      qty: waterUnits,
-      rate: lease.rates.water,
-      amount: waterUnits * lease.rates.water,
-    });
-  }
+  lines.push(...meterLines(input, lease.rates));
 
   if (lease.rates.ac > 0)
     lines.push({ type: "ac", label: "ค่าเช่าแอร์", qty: 1, rate: lease.rates.ac, amount: lease.rates.ac });

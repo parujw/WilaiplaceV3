@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Bill } from "./types";
-import { agingBucket, buildBill, dueDateFor, meterUnits, nextCycle, previousCycle, hasRentBill } from "./billing";
+import { agingBucket, buildBill, dueDateFor, meterUnits, nextCycle, previousCycle, hasRentBill, withMeterLines } from "./billing";
 
 const lease = {
   rent: 3500,
@@ -108,5 +108,31 @@ describe("hasRentBill", () => {
   it("คนละห้องหรือคนละรอบไม่นับ", () => {
     expect(hasRentBill([bill()], "wlp1-102", "202609")).toBe(false);
     expect(hasRentBill([bill()], "wlp1-101", "202608")).toBe(false);
+  });
+});
+
+describe("withMeterLines", () => {
+  const issued = buildBill({ lease, elecPrevious: 100, elecCurrent: 150, waterPrevious: 10, waterCurrent: 15, carryOver: 200 }).lines;
+
+  it("เปลี่ยนเฉพาะค่าไฟค่าน้ำ รายการอื่นและลำดับคงเดิม", () => {
+    const lines = withMeterLines(issued, { elecPrevious: 100, elecCurrent: 160, waterPrevious: 10, waterCurrent: 15 }, lease.rates);
+    expect(lines.map((l) => l.type)).toEqual(issued.map((l) => l.type));
+    expect(lines.find((l) => l.type === "electricity")).toMatchObject({ qty: 60, amount: 480, label: "ค่าไฟ (100 → 160)" });
+    expect(lines.find((l) => l.type === "carryOver")?.amount).toBe(200);
+  });
+
+  it("ใช้ค่าต่อหน่วยที่อยู่ในบิล ถ้าแก้ราคาในบิลไว้เองก็ไม่โดนทับ", () => {
+    const edited = issued.map((l) => (l.type === "electricity" ? { ...l, rate: 7 } : l));
+    const lines = withMeterLines(edited, { elecPrevious: 100, elecCurrent: 110, waterPrevious: 10, waterCurrent: 10 }, lease.rates);
+    expect(lines.find((l) => l.type === "electricity")).toMatchObject({ qty: 10, rate: 7, amount: 70 });
+    // น้ำไม่ได้ใช้ ก็ไม่มีรายการ
+    expect(lines.some((l) => l.type === "water")).toBe(false);
+  });
+
+  it("บิลเดิมไม่มีค่าไฟค่าน้ำ ใส่ต่อจากค่าเช่าด้วยค่าของสัญญา", () => {
+    const noMeter = buildBill({ lease, elecPrevious: 100, elecCurrent: 100, waterPrevious: 10, waterCurrent: 10 }).lines;
+    const lines = withMeterLines(noMeter, { elecPrevious: 100, elecCurrent: 120, waterPrevious: 10, waterCurrent: 12 }, lease.rates);
+    expect(lines.map((l) => l.type)).toEqual(["rent", "electricity", "water", "ac"]);
+    expect(lines[1]).toMatchObject({ rate: 8, amount: 160 });
   });
 });
