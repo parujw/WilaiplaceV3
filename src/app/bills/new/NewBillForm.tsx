@@ -3,9 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Alert, Field, Ghost, Input, Select, Submit, send } from "@/components/form";
+import Link from "next/link";
 import { EDITABLE_LINE_TYPES, LINE_TYPE_LABEL, round2 } from "@/lib/bill-edit";
-import { baht, cycleLabel } from "@/lib/format";
-import type { BillLineType } from "@/lib/types";
+import { meterLines, type MeterValues } from "@/lib/billing";
+import { BILL_STATUS_LABEL, baht, cycleLabel } from "@/lib/format";
+import type { BillLineType, BillStatus, Rates } from "@/lib/types";
 
 /**
  * ออกบิลใบเดียวแบบกรอกรายการเอง
@@ -13,6 +15,10 @@ import type { BillLineType } from "@/lib/types";
  * หน้าจดมิเตอร์ออกบิลค่าเช่าทั้งตึกเดือนละครั้งและคิดรายการให้เอง
  * แต่ของจริงมีใบที่ไม่เข้ารอบนั้น — ค่ามัดจำตอนจอง ค่าซ่อม ค่าปรับ บิลย้อนหลัง
  * เดิมปุ่มออกบิลพาไปหน้าจดมิเตอร์อย่างเดียว ใบพวกนี้จึงออกไม่ได้เลย
+ *
+ * เลือกห้องกับรอบแล้วเติมรายการให้เอง — ค่าเช่า ค่าบริการรายเดือน ยอดค้าง
+ * และค่าไฟค่าน้ำถ้าจดมิเตอร์รอบนั้นไว้แล้ว ไม่ต้องพิมพ์ทีละบรรทัด
+ * ห้องที่ออกบิลค่าเช่ารอบนั้นไปแล้วไม่บล็อก แค่บอกสถานะให้เห็น เพราะใบเพิ่มมีจริง
  */
 
 export interface RoomChoice {
@@ -22,6 +28,19 @@ export interface RoomChoice {
   tenantName: string | null;
   rent: number;
   deposit: number;
+  /** ค่าต่อหน่วยของสัญญา — null = ห้องว่าง */
+  rates: Rates | null;
+}
+
+/** สถานะของห้องหนึ่งในรอบหนึ่ง */
+export interface CycleInfo {
+  /** จดมิเตอร์รอบนี้ไว้แล้ว */
+  reading: MeterValues | null;
+  /** เลขล่าสุดก่อนรอบนี้ — บอกให้รู้ว่าครั้งก่อนอยู่ที่เท่าไหร่ */
+  previous: { elec: number; water: number } | null;
+  carryOver: number;
+  rentBill: { id: string; billNo: string; status: BillStatus } | null;
+  otherBills: string[];
 }
 
 interface Row {
@@ -41,6 +60,28 @@ const row = (type: BillLineType, label: string, rate: number | string = ""): Row
   rate: String(rate),
 });
 
+/** รายการเริ่มต้นของห้องในรอบนั้น — ห้องว่างเริ่มที่ค่ามัดจำ (คนจอง) */
+function autoRows(room: RoomChoice | undefined, info: CycleInfo | undefined): Row[] {
+  if (!room) return [];
+  if (!room.rates || !room.tenantId) return [row("deposit", "ค่ามัดจำ", room.deposit || room.rent || "")];
+
+  const rows: Row[] = [row("rent", "ค่าเช่าห้อง", room.rent)];
+  if (info?.reading) {
+    for (const line of meterLines(info.reading, room.rates)) {
+      rows.push({ ...row(line.type, line.label, line.rate), qty: String(line.qty) });
+    }
+  } else {
+    // ยังไม่จดมิเตอร์ — ใส่ช่องไว้ให้กรอกหน่วยเอง ไม่ใส่ก็ไม่ขึ้นบนบิล
+    rows.push({ ...row("electricity", "ค่าไฟ", room.rates.elec), qty: "" });
+    rows.push({ ...row("water", "ค่าน้ำ", room.rates.water), qty: "" });
+  }
+  if (room.rates.ac > 0) rows.push(row("ac", "ค่าเช่าแอร์", room.rates.ac));
+  if (room.rates.internet > 0) rows.push(row("internet", "ค่าอินเทอร์เน็ต", room.rates.internet));
+  if (room.rates.parking > 0) rows.push(row("parking", "ค่าที่จอดรถ", room.rates.parking));
+  if (info && info.carryOver > 0) rows.push(row("carryOver", "ยอดค้างยกมา", info.carryOver));
+  return rows;
+}
+
 function amountOf(r: Row): number {
   const value = round2(Number(r.qty) * Number(r.rate));
   if (!Number.isFinite(value)) return 0;
@@ -48,24 +89,37 @@ function amountOf(r: Row): number {
 }
 
 export function NewBillForm({
-  rooms, tenants, cycles,
+  rooms, tenants, cycles, info, defaultCycle, defaultRoom,
 }: {
   rooms: RoomChoice[];
   tenants: Array<{ id: string; name: string }>;
   cycles: string[];
+  info: Record<string, Record<string, CycleInfo>>;
+  defaultCycle: string;
+  defaultRoom: string;
 }) {
   const router = useRouter();
-  const [roomId, setRoomId] = useState(rooms[0]?.id ?? "");
-  const [cycle, setCycle] = useState(cycles[0] ?? "");
+  const [roomId, setRoomId] = useState(defaultRoom);
+  const [cycle, setCycle] = useState(defaultCycle);
   const [dueDate, setDueDate] = useState("");
   const [note, setNote] = useState("");
   const [tenantChoice, setTenantChoice] = useState("");
   const [tenantName, setTenantName] = useState("");
-  const [rows, setRows] = useState<Row[]>([row("deposit", "ค่ามัดจำ")]);
+  const [rows, setRows] = useState<Row[]>(() =>
+    autoRows(rooms.find((r) => r.id === defaultRoom), info[defaultCycle]?.[defaultRoom]),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const room = rooms.find((r) => r.id === roomId);
+  const status = info[cycle]?.[roomId];
+
+  // เปลี่ยนห้องหรือรอบ = เติมรายการใหม่ของห้องนั้นรอบนั้น
+  function choose(nextRoom: string, nextCycle: string) {
+    setRoomId(nextRoom);
+    setCycle(nextCycle);
+    setRows(autoRows(rooms.find((r) => r.id === nextRoom), info[nextCycle]?.[nextRoom]));
+  }
   const total = round2(rows.reduce((sum, r) => sum + amountOf(r), 0));
   const patch = (key: string, field: keyof Row, value: string) =>
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, [field]: value } : r)));
@@ -95,7 +149,10 @@ export function NewBillForm({
             note,
             tenantId: tenantChoice || undefined,
             tenantName: needsName ? tenantName : undefined,
-            lines: rows.map(({ type, label, qty, rate }) => ({ type, label, qty, rate })),
+            lines: rows
+              // ช่องค่าไฟค่าน้ำที่เติมไว้ให้แต่ไม่ได้กรอกหน่วย ไม่ต้องขึ้นบนบิลเป็นบรรทัด 0 บาท
+              .filter((r) => !((r.type === "electricity" || r.type === "water") && amountOf(r) === 0))
+              .map(({ type, label, qty, rate }) => ({ type, label, qty, rate })),
           });
           router.replace(`/bills/${encodeURIComponent(String(res.billId))}`);
           router.refresh();
@@ -109,7 +166,7 @@ export function NewBillForm({
       <div className="card space-y-3 p-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="ห้อง">
-            <Select value={roomId} onChange={(e) => { setRoomId(e.target.value); setTenantChoice(""); }} required>
+            <Select value={roomId} onChange={(e) => { choose(e.target.value, cycle); setTenantChoice(""); }} required>
               {rooms.map((r) => (
                 <option key={r.id} value={r.id}>
                   ห้อง {r.roomNo}{r.tenantName ? ` · ${r.tenantName}` : " · ว่าง"}
@@ -118,7 +175,7 @@ export function NewBillForm({
             </Select>
           </Field>
           <Field label="รอบบิล">
-            <Select value={cycle} onChange={(e) => setCycle(e.target.value)}>
+            <Select value={cycle} onChange={(e) => choose(roomId, e.target.value)}>
               {cycles.map((c) => (
                 <option key={c} value={c}>{cycleLabel(c, "full")}</option>
               ))}
@@ -145,8 +202,49 @@ export function NewBillForm({
         ) : null}
       </div>
 
+      {status && room?.tenantId ? (
+        <div className="card space-y-1.5 p-4 text-[13px]">
+          <p className="text-[12px] font-bold text-muted">ห้อง {room.roomNo} · รอบ {cycleLabel(cycle, "full")}</p>
+          {status.rentBill ? (
+            <p className="rounded-xl bg-warn/10 px-3 py-2 font-semibold text-[#96690f]">
+              ออกบิลค่าเช่ารอบนี้แล้ว ·{" "}
+              <Link href={`/bills/${encodeURIComponent(status.rentBill.id)}`} className="underline underline-offset-2">
+                {status.rentBill.billNo}
+              </Link>{" "}
+              ({BILL_STATUS_LABEL[status.rentBill.status]}) — ใบนี้จะเป็นบิลเพิ่ม ถ้าจะแก้ยอดให้แก้ที่บิลเดิม
+            </p>
+          ) : (
+            <p className="text-muted">ยังไม่ออกบิลค่าเช่ารอบนี้</p>
+          )}
+          {status.reading ? (
+            <p>
+              จดมิเตอร์แล้ว · ไฟ {status.reading.elecPrevious} → {status.reading.elecCurrent} · น้ำ{" "}
+              {status.reading.waterPrevious} → {status.reading.waterCurrent}
+            </p>
+          ) : (
+            <p className="text-muted">
+              ยังไม่จดมิเตอร์รอบนี้
+              {status.previous ? ` · ครั้งก่อน ไฟ ${status.previous.elec} น้ำ ${status.previous.water}` : ""} — กรอกหน่วยเองด้านล่าง หรือ{" "}
+              <Link href={`/meter?cycle=${cycle}`} className="font-semibold text-accent">ไปจดมิเตอร์</Link>
+            </p>
+          )}
+          {status.otherBills.length > 0 ? (
+            <p className="text-muted">บิลอื่นของรอบนี้: {status.otherBills.join(", ")}</p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="card space-y-3 p-4">
-        <h2 className="text-[15px] font-bold tracking-tight">รายการในบิล</h2>
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-[15px] font-bold tracking-tight">รายการในบิล</h2>
+          <button
+            type="button"
+            onClick={() => setRows(autoRows(room, status))}
+            className="text-[12px] font-semibold text-accent"
+          >
+            เติมรายการใหม่
+          </button>
+        </div>
 
         <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1">
           {presets.map(([label, make]) => (

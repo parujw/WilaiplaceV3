@@ -1,19 +1,29 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { IconBack, IconGauge } from "@/components/icons";
+import { lastReadingFor } from "@/lib/billing";
 import { requireContext } from "@/lib/guard";
-import { availableCycles, getRoomViews, listTenants } from "@/lib/repo";
-import { NewBillForm, type RoomChoice } from "./NewBillForm";
+import { billingCycles, currentCycle, getRoomViews, listBills, listLeases, listMeterReadings, listTenants } from "@/lib/repo";
+import { carryOverFor, tenancyLeaseIds } from "@/lib/tenancy";
+import { NewBillForm, type CycleInfo, type RoomChoice } from "./NewBillForm";
 
 export const dynamic = "force-dynamic";
 
 /** ออกบิลใบเดียวแบบกรอกรายการเอง — คนละทางกับการออกบิลค่าเช่าทั้งตึกจากมิเตอร์ */
-export default async function NewBillPage() {
+export default async function NewBillPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ room?: string; cycle?: string }>;
+}) {
+  const { room: roomParam, cycle: cycleParam } = await searchParams;
   const { property } = await requireContext();
-  const [views, tenants, cycles] = await Promise.all([
+  const [views, tenants, cycles, bills, readings, leases] = await Promise.all([
     getRoomViews(property.id),
     listTenants(property.id),
-    availableCycles(property.id),
+    billingCycles(property.id),
+    listBills(property.id),
+    listMeterReadings(property.id),
+    listLeases(property.id),
   ]);
 
   const rooms: RoomChoice[] = views.map((v) => ({
@@ -23,7 +33,44 @@ export default async function NewBillPage() {
     tenantName: v.tenant?.name ?? null,
     rent: v.lease?.rent ?? v.room.baseRent,
     deposit: v.lease?.deposit ?? 0,
+    rates: v.lease?.rates ?? null,
   }));
+
+  /*
+   * สถานะของทุกห้องในทุกรอบที่เลือกได้ — เปลี่ยนห้องหรือรอบในฟอร์มแล้วเติมรายการให้ทันที
+   * ไม่ต้องถามเซิร์ฟเวอร์ใหม่ 17 ห้อง × ไม่กี่รอบ เล็กพอส่งไปทั้งก้อน
+   */
+  const live = bills.filter((b) => b.status !== "void");
+  const info: Record<string, Record<string, CycleInfo>> = {};
+  for (const cycle of cycles) {
+    info[cycle] = {};
+    for (const v of views) {
+      const saved = readings.find((r) => r.roomId === v.room.id && r.cycle === cycle);
+      const previous = lastReadingFor(readings, v.room.id, cycle);
+      const ofRoom = live.filter((b) => b.roomId === v.room.id && b.cycle === cycle);
+      const rentBill = ofRoom.find((b) => b.lines.some((l) => l.type === "rent"));
+      info[cycle][v.room.id] = {
+        reading: saved
+          ? {
+              elecPrevious: saved.elecPrevious,
+              elecCurrent: saved.elecCurrent,
+              waterPrevious: saved.waterPrevious,
+              waterCurrent: saved.waterCurrent,
+            }
+          : null,
+        previous: previous ? { elec: previous.elecCurrent, water: previous.waterCurrent } : null,
+        // ยอดค้างของการเช่าครั้งนี้เท่านั้น — วิธีเดียวกับตอนออกบิลทั้งตึก
+        carryOver: v.lease
+          ? carryOverFor(bills, tenancyLeaseIds(leases, v.room.activeLeaseId), v.tenant?.id ?? null, cycle)
+          : 0,
+        rentBill: rentBill ? { id: rentBill.id, billNo: rentBill.billNo, status: rentBill.status } : null,
+        otherBills: ofRoom.filter((b) => b !== rentBill).map((b) => b.billNo),
+      };
+    }
+  }
+
+  const defaultCycle = cycles.includes(cycleParam ?? "") ? cycleParam! : currentCycle();
+  const defaultRoom = rooms.some((r) => r.id === roomParam) ? roomParam! : (rooms[0]?.id ?? "");
 
   return (
     <AppShell>
@@ -33,7 +80,7 @@ export default async function NewBillPage() {
         </Link>
         <div className="min-w-0 flex-1">
           <h1 className="text-[20px] font-bold leading-tight tracking-tight">ออกบิล</h1>
-          <p className="text-[13px] text-muted">กรอกรายการเอง · {property.name}</p>
+          <p className="text-[13px] text-muted">เติมรายการให้จากสัญญาและมิเตอร์ · {property.name}</p>
         </div>
       </header>
 
@@ -56,6 +103,9 @@ export default async function NewBillPage() {
           rooms={rooms}
           tenants={tenants.map((t) => ({ id: t.id, name: t.name }))}
           cycles={cycles}
+          info={info}
+          defaultCycle={defaultCycle}
+          defaultRoom={defaultRoom}
         />
       </section>
     </AppShell>

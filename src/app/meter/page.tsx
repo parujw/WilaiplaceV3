@@ -4,7 +4,7 @@ import { IconBack, IconChevron } from "@/components/icons";
 import { lastReadingFor } from "@/lib/billing";
 import { cycleLabel } from "@/lib/format";
 import { requireContext } from "@/lib/guard";
-import { availableCycles, currentCycle, getRoomViews, listBills, listMeterReadings } from "@/lib/repo";
+import { billingCycles, currentCycle, getRoomViews, listBills, listMeterReadings } from "@/lib/repo";
 import { MeterSheet, type MeterRow } from "./MeterSheet";
 
 export const dynamic = "force-dynamic";
@@ -22,15 +22,15 @@ export default async function MeterPage({
     getRoomViews(property.id),
     listMeterReadings(property.id),
     listBills(property.id),
-    availableCycles(property.id),
+    billingCycles(property.id),
   ]);
 
   const live = billsAll.filter((b) => b.status !== "void");
   // ออกบิลค่าเช่าไปแล้วเท่านั้นที่ถือว่าจบ บิลมัดจำหรือบิลค่าซ่อมยังต้องออกค่าเช่าต่อ
-  const rentBillNo = new Map(
+  const rentBill = new Map(
     live
       .filter((b) => b.cycle === cycle && b.lines.some((l) => l.type === "rent"))
-      .map((b) => [b.roomId, b.billNo]),
+      .map((b) => [b.roomId, b]),
   );
   // บิลอื่นของรอบนี้เอาไว้บอกว่าห้องนั้นมีใบอะไรออกไปแล้วบ้าง จะได้ไม่ออกซ้ำโดยไม่รู้ตัว
   const otherBills = new Map<string, string[]>();
@@ -43,6 +43,9 @@ export default async function MeterPage({
     .filter((v) => v.lease && v.tenant)
     .map((v) => {
       const previous = lastReadingFor(readings, v.room.id, cycle);
+      // จดของรอบนี้ไว้แล้ว (ออกบิลแล้ว หรือบันทึกเลขไว้ก่อน) — ขึ้นเลขเดิมให้แก้ต่อได้
+      const saved = readings.find((r) => r.roomId === v.room.id && r.cycle === cycle) ?? null;
+      const bill = rentBill.get(v.room.id);
       const carryOver = live
         .filter((b) => b.roomId === v.room.id && b.cycle < cycle)
         .reduce((sum, b) => sum + b.balance, 0);
@@ -58,15 +61,23 @@ export default async function MeterPage({
         acFee: v.lease!.rates.ac,
         internetFee: v.lease!.rates.internet,
         parkingFee: v.lease!.rates.parking,
-        elecPrevious: previous?.elecCurrent ?? 0,
-        waterPrevious: previous?.waterCurrent ?? 0,
+        elecPrevious: saved?.elecPrevious ?? previous?.elecCurrent ?? 0,
+        waterPrevious: saved?.waterPrevious ?? previous?.waterCurrent ?? 0,
+        saved: saved
+          ? {
+              elecPrevious: saved.elecPrevious,
+              elecCurrent: saved.elecCurrent,
+              waterPrevious: saved.waterPrevious,
+              waterCurrent: saved.waterCurrent,
+            }
+          : null,
         carryOver,
-        billedBillNo: rentBillNo.get(v.room.id) ?? null,
+        bill: bill ? { billNo: bill.billNo, id: bill.id, total: bill.total, paid: bill.paid, status: bill.status } : null,
         otherBillNos: otherBills.get(v.room.id) ?? [],
       };
     });
 
-  const pending = rows.filter((r) => !r.billedBillNo).length;
+  const pending = rows.filter((r) => !r.bill).length;
 
   return (
     <AppShell>
