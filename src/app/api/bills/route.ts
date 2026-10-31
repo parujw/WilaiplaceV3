@@ -1,9 +1,11 @@
 import { ApiError, handle, readJson, requestOrigin, requireEditor } from "@/lib/api";
 import { normalizeLines, recalcTotals, type LineInput } from "@/lib/bill-edit";
-import { dueDateFor } from "@/lib/billing";
+import { dueDateFor, type MeterValues } from "@/lib/billing";
 import { db } from "@/lib/db";
-import { audit, getProperty, getRoomViews, getTenant, nextBillNo } from "@/lib/repo";
-import type { Bill } from "@/lib/types";
+import type { WriteOp } from "@/lib/db/store";
+import { meterReadingId } from "@/lib/ids";
+import { audit, getProperty, getRoomViews, getTenant, listBills, nextBillNo } from "@/lib/repo";
+import type { Bill, MeterReading } from "@/lib/types";
 
 /**
  * ออกบิลใบเดียวแบบกรอกรายการเอง
@@ -26,6 +28,24 @@ interface CreateBillBody {
   dueDate?: string;
   note?: string;
   lines?: LineInput[];
+  /** เลขมิเตอร์ที่กรอกในหน้าออกบิล — บันทึกเป็นการจดของรอบนี้ด้วย */
+  meter?: Partial<Record<keyof MeterValues, number | string>>;
+}
+
+/** เลขมิเตอร์ครบสี่ตัวและไม่ติดลบ ไม่งั้นไม่บันทึก — ไม่เดาให้ */
+function meterFrom(input: CreateBillBody["meter"]): MeterValues | null {
+  if (!input) return null;
+  const keys = ["elecPrevious", "elecCurrent", "waterPrevious", "waterCurrent"] as const;
+  // ช่องว่างต้องไม่กลายเป็น 0 — Number("") คือ 0 ซึ่งจะได้บิลค่าไฟหลายพันหน่วย
+  if (keys.some((k) => input[k] === undefined || input[k] === null || String(input[k]).trim() === "")) {
+    throw new ApiError("เลขมิเตอร์ต้องกรอกครบทั้งไฟและน้ำ ทั้งครั้งก่อนและครั้งนี้");
+  }
+  const values = keys.map((k) => Number(input[k]));
+  if (values.some((v) => !Number.isFinite(v) || v < 0)) {
+    throw new ApiError("เลขมิเตอร์ต้องเป็นตัวเลขไม่ติดลบ ครบทั้งไฟและน้ำ");
+  }
+  const [elecPrevious, elecCurrent, waterPrevious, waterCurrent] = values;
+  return { elecPrevious, elecCurrent, waterPrevious, waterCurrent };
 }
 
 export async function POST(request: Request) {
@@ -94,16 +114,46 @@ export async function POST(request: Request) {
       ...(body.note?.trim() ? { note: body.note.trim() } : {}),
     };
 
-    await db().set("bills", bill.id, bill as unknown as Record<string, unknown>);
+    const ops: WriteOp[] = [
+      { type: "set", collection: "bills", id: bill.id, data: bill as unknown as Record<string, unknown> },
+    ];
+
+    /*
+     * เลขมิเตอร์ที่กรอกมา บันทึกเป็นการจดของรอบนี้ในคราวเดียวกับบิล
+     * ยกเว้นรอบนี้มีบิลค่าเช่าอยู่แล้ว — เลขของรอบผูกกับบิลใบนั้น
+     * เขียนทับตรงนี้แล้วบิลเดิมกับเลขมิเตอร์จะไม่ตรงกัน แก้เลขต้องไปที่หน้าจดมิเตอร์
+     */
+    const meter = meterFrom(body.meter);
+    let meterSaved = false;
+    if (meter && view.lease) {
+      const hasRentBill = (await listBills(propertyId)).some(
+        (b) => b.roomId === view.room.id && b.cycle === cycle && b.status !== "void" && b.lines.some((l) => l.type === "rent"),
+      );
+      if (!hasRentBill) {
+        const reading: MeterReading = {
+          id: meterReadingId(propertyId, cycle, view.room.roomNo),
+          propertyId,
+          roomId: view.room.id,
+          cycle,
+          ...meter,
+          readAt: bill.issuedAt,
+          readBy: user.email,
+        };
+        ops.push({ type: "set", collection: "meterReadings", id: reading.id, data: reading as unknown as Record<string, unknown> });
+        meterSaved = true;
+      }
+    }
+
+    await db().batch(ops);
     await audit(user, {
       propertyId,
       action: "bill.create",
       targetType: "bill",
       targetId: bill.id,
       before: null,
-      after: { roomNo: bill.roomNo, total: bill.total, cycle, lines: lines.map((l) => l.label) },
+      after: { roomNo: bill.roomNo, total: bill.total, cycle, lines: lines.map((l) => l.label), meter: meterSaved ? meter : null },
     });
 
-    return { ok: true, billId: bill.id, billNo, total: bill.total, origin: requestOrigin(request) };
+    return { ok: true, billId: bill.id, billNo, total: bill.total, meterSaved, origin: requestOrigin(request) };
   });
 }
