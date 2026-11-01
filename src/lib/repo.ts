@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { buildAlerts, type Alert } from "./alerts";
+import { buildWorld } from "./world";
 import { outstandingOfTenancy, tenancyLeaseIds } from "./tenancy";
 import { currentCycle, daysOverdue, dueDateFor, nextCycle, previousCycle } from "./billing";
 import {
@@ -356,4 +357,16 @@ export type Insights = Awaited<ReturnType<typeof getInsights>>;
 export async function migrationIssues(): Promise<string[]> {
   const doc = await db().get<{ issues?: string[] }>("counters", "migrationIssues");
   return doc?.issues ?? [];
+}
+
+/** W World — คิวงานของพนักงานอัตโนมัติแต่ละคน (ดู src/lib/world.ts) */
+export async function getWorld(propertyId: string) {
+  const [views, bills, readings, leases, maintenance] = await Promise.all([
+    getRoomViews(propertyId),
+    billsOf(propertyId),
+    readingsOf(propertyId),
+    leasesOf(propertyId),
+    maintenanceOf(propertyId),
+  ]);
+  return buildWorld({ views, bills, readings, leases, maintenance });
 }

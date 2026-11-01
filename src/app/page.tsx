@@ -112,6 +112,20 @@ export default async function HomePage() {
       </section>
 
       <section className="px-4 pt-4">
+        <Link
+          href="/world"
+          className="flex items-center gap-3 rounded-[1.25rem] bg-[#22196b] px-4 py-3.5 text-white shadow-[var(--shadow-card)] active:opacity-90"
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#e8703a] font-mono text-[20px] font-black leading-none">W</span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-mono text-[14px] font-extrabold tracking-[0.2em]">W WORLD</span>
+            <span className="block truncate text-[12px] text-white/75">ออฟฟิศทีมอัตโนมัติ · ดูคิวงานของพนักงานแต่ละคน</span>
+          </span>
+          <IconChevron className="h-4 w-4 shrink-0 text-white/70" />
+        </Link>
+      </section>
+
+      <section className="px-4 pt-4">
         <div className="card grid grid-cols-4 gap-1 p-2">
           {QUICK.map(({ href, label, Icon }) => (
             <Link key={href} href={href} className="flex flex-col items-center gap-1.5 rounded-xl px-1 py-3 active:bg-surface-2">

@@ -54,7 +54,7 @@ const EXPIRY_WARNING_DAYS = 60;
 const BILLING_WINDOW_DAYS = 7;
 
 /** วันนี้อยู่ในช่วงที่ควรออกบิลของรอบนั้นแล้วหรือยัง */
-function inBillingWindow(cycle: Cycle, today: Date): boolean {
+export function inBillingWindow(cycle: Cycle, today: Date): boolean {
   const year = Number(cycle.slice(0, 4));
   const month = Number(cycle.slice(4, 6));
   if (!Number.isFinite(year) || !Number.isFinite(month)) return true;

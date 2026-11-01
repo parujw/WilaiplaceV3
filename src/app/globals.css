@@ -89,3 +89,18 @@ a:has(.spinner) {
   .no-print { display: none !important; }
   body, html, .app-frame { background: #fff; box-shadow: none; max-width: none; }
 }
+
+/* W World — แอนิเมชันพิกเซล */
+@keyframes w-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+@keyframes w-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+@keyframes w-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.25; } }
+@keyframes w-blink-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@keyframes w-twinkle { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.2; } }
+.w-bob { animation: w-bob 1.6s steps(2) infinite; }
+.w-float { animation: w-float 1.2s steps(2) infinite; }
+.w-blink { animation: w-blink 0.9s steps(1) infinite; }
+.w-blink-soft { animation: w-blink-soft 1.2s ease-in-out infinite; }
+.w-twinkle { animation: w-twinkle 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .w-bob, .w-float, .w-blink, .w-blink-soft, .w-twinkle { animation: none; }
+}
