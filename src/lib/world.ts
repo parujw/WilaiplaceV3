@@ -323,3 +323,46 @@ export function buildWorld(input: WorldInput): World {
     clear: staff.length - active.length,
   };
 }
+
+/* ------------------------------ สรุปประจำวัน ------------------------------ */
+
+const STATUS_ICON: Record<AgentStatus, string> = { idle: "✅", waiting: "💤", busy: "🟡", alert: "🔴" };
+
+/**
+ * ข้อความสรุปเช้าที่ WILAI ส่งเข้า LINE เจ้าของ — หลายอาคารรวมเป็นข้อความเดียว
+ * บอกแค่ว่าใครมีงานกี่งาน กับงานแรกๆ ที่ควรทำ ไม่ใส่ชื่อ/เบอร์ผู้เช่าทั้งหมดลงแชต
+ */
+export function dailyBrief(
+  buildings: Array<{ name: string; world: World }>,
+  options: { today?: Date; appUrl?: string; perAgent?: number } = {},
+): string {
+  const today = options.today ?? new Date();
+  const perAgent = options.perAgent ?? 3;
+  const date = today.toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "2-digit" });
+  const total = buildings.reduce((s, b) => s + b.world.totalTasks, 0);
+
+  const lines: string[] = [`☀️ W World สรุปเช้า ${date}`, total === 0 ? "ไม่มีงานค้าง ทุกคนว่าง 🎉" : `งานค้างรวม ${total} งาน`];
+
+  for (const { name, world } of buildings) {
+    lines.push("", `🏢 ${name}`);
+    const staff = world.agents.filter((a) => a.id !== "head");
+    const active = staff.filter((a) => a.status === "busy" || a.status === "alert");
+    if (active.length === 0) {
+      lines.push("✅ ไม่มีงานค้าง");
+      continue;
+    }
+    active.sort((a, b) => RANK[b.status] - RANK[a.status] || b.tasks.length - a.tasks.length);
+    for (const a of active) {
+      lines.push(`${STATUS_ICON[a.status]} ${a.name} (${a.role}) — ${a.summary}`);
+      for (const t of a.tasks.slice(0, perAgent)) lines.push(`   • ${t.label}`);
+      if (a.tasks.length > perAgent) lines.push(`   • และอีก ${a.tasks.length - perAgent} งาน`);
+    }
+    const waiting = staff.filter((a) => a.status === "waiting");
+    if (waiting.length > 0) lines.push(`💤 รอคิว: ${waiting.map((a) => a.name).join(", ")}`);
+  }
+
+  if (options.appUrl) lines.push("", `เปิดดู: ${options.appUrl.replace(/\/$/, "")}/world`);
+  // LINE จำกัดข้อความละ 5,000 ตัวอักษร
+  const body = lines.join("\n");
+  return body.length > 4900 ? `${body.slice(0, 4890)}\n…` : body;
+}

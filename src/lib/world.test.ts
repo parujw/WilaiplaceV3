@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorld, type WorldInput } from "./world";
+import { buildWorld, dailyBrief, type WorldInput } from "./world";
 import type { Bill, Lease, MaintenanceRequest, MeterReading, Rates, Room, RoomView, Tenant } from "./types";
 
 const RATES: Rates = { elec: 8, water: 20, ac: 0, internet: 0, parking: 0 };
@@ -99,5 +99,29 @@ describe("buildWorld", () => {
     expect(w.totalTasks).toBe(0);
     expect(w.clear).toBe(7);
     expect(agent(w, "head").status).toBe("idle");
+  });
+});
+
+describe("dailyBrief", () => {
+  it("บอกงานด่วนก่อน และไม่นับงานที่รอคิว", () => {
+    const w = buildWorld(input({ bills: [bill({ cycle: "202607", dueDate: "2026-08-01", sentToLineAt: "x" })] }));
+    const text = dailyBrief([{ name: "วิไลเพลส 1", world: w }], { today: MID, appUrl: "https://x.app/" });
+    expect(text).toContain("🏢 วิไลเพลส 1");
+    expect(text).toContain("🔴 CASHY");
+    expect(text).toContain("💤 รอคิว: MITER, BILLY");
+    expect(text).toContain("https://x.app/world");
+  });
+
+  it("ไม่มีงานค้างก็บอกสั้นๆ", () => {
+    const w = buildWorld(input({ today: END, readings: [reading()], bills: [bill({ sentToLineAt: "x" })] }));
+    expect(dailyBrief([{ name: "A", world: w }], { today: END })).toContain("ไม่มีงานค้าง ทุกคนว่าง");
+  });
+
+  it("ตัดงานยาวๆ เหลือไม่กี่ข้อต่อคน", () => {
+    const views = Array.from({ length: 6 }, (_, i) =>
+      view({ room: room({ id: `v${i}`, roomNo: `${200 + i}`, activeLeaseId: null }), lease: null, tenant: null }),
+    );
+    const text = dailyBrief([{ name: "A", world: buildWorld(input({ views })) }], { today: MID });
+    expect(text).toContain("และอีก 3 งาน");
   });
 });

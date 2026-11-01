@@ -38,6 +38,13 @@ async function handleText(event: LineEvent, body: string): Promise<void> {
   const replyToken = event.replyToken;
   if (!lineUserId || !replyToken) return;
 
+  // เจ้าของพิมพ์ "myid" เพื่อเอา userId ไปใส่ LINE_OWNER_USER_IDS (รับสรุปเช้าจาก W World)
+  // บอกได้เฉพาะไอดีของคนที่พิมพ์เอง ไม่รั่วของคนอื่น
+  if (/^(myid|my id|ไอดี)$/i.test(body.trim())) {
+    await reply(replyToken, [text(`LINE userId ของคุณคือ\n${lineUserId}`)]);
+    return;
+  }
+
   const code = extractCode(body);
   if (!code) {
     const already = await boundTenant(lineUserId);
